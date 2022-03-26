@@ -1,5 +1,6 @@
 #include "KeyboardController.h"
 #include "GlobalCtx2.h"
+#include <SDL2/SDL_events.h>
 
 namespace Ship {
 	KeyboardController::KeyboardController(int32_t dwControllerNumber) : Controller(dwControllerNumber) {
@@ -32,9 +33,29 @@ namespace Ship {
 		dwPressedButtons = 0;
 	}
 
+	float oldX, oldY;
+
 	void KeyboardController::ReadFromSource() {
 		wStickX = 0;
 		wStickY = 0;
+
+		SDL_PumpEvents();
+
+		int x, y;
+		Uint32 buttons;
+
+		buttons = SDL_GetMouseState(&x, &y);
+
+		float newX = x - oldX;
+		float newY = y - oldY;
+
+		oldX = x;
+		oldY = y;
+
+		wGyroX = -newY / 10;
+		wGyroY = -newX / 10;
+
+		SDL_SetRelativeMouseMode(SDL_TRUE);
 	}
 
 	void KeyboardController::WriteToSource(ControllerCallback* controller)
