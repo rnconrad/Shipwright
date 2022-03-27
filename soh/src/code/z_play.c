@@ -19,6 +19,8 @@ s16 D_801614C8;
 u64 D_801614D0[0xA00];
 #endif
 
+static s32 isMyCustomActorSpawned;
+
 GlobalContext* gGlobalCtx;
 
 void func_800BC450(GlobalContext* globalCtx) {
@@ -410,6 +412,8 @@ void Gameplay_Init(GameState* thisx) {
         DmaMgr_DmaRomToRam(0x03FEB000, D_8012D1F0, sizeof(D_801614D0));
     }
     #endif
+
+    isMyCustomActorSpawned = false;
 }
 
 void Gameplay_Update(GlobalContext* globalCtx) {
@@ -420,6 +424,11 @@ void Gameplay_Update(GlobalContext* globalCtx) {
     s32 pad2;
 
     input = globalCtx->state.input;
+
+    if (!isMyCustomActorSpawned) {
+        Actor_Spawn(&globalCtx->actorCtx, globalCtx, ACTOR_SOH_ONLINE, 0.0f, 0.0f, 0.0f, 0, 0, 0, 0x0000);
+        isMyCustomActorSpawned = true;
+    }
 
     if ((SREG(1) < 0) || (DREG(0) != 0)) {
         SREG(1) = 0;

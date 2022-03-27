@@ -2169,6 +2169,9 @@
     <ClCompile Include="src\overlays\actors\ovl_Shot_Sun\z_shot_sun.c">
       <Filter>Source Files\src\overlays\actors</Filter>
     </ClCompile>
+    <ClCompile Include="src\overlays\actors\ovl_Soh_Online\soh_online.c">
+      <Filter>Source Files\src\overlays\actors</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\overlays\actors\ovl_kaleido_scope\z_kaleido_scope.h">
@@ -3709,6 +3712,9 @@
     </ClInclude>
     <ClInclude Include="resource.h">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\overlays\actors\ovl_Soh_Online\soh_online.h">
+      <Filter>Source Files\src\overlays\actors</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
