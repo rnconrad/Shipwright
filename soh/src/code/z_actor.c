@@ -517,6 +517,7 @@ void func_8002C7BC(TargetContext* targetCtx, Player* player, Actor* actorArg, Gl
         targetCtx->activeCategory = actorCategory;
         targetCtx->unk_40 = 1.0f;
 
+        /*
         if (CVar_GetS32("gBlindMode", 0)) {
             u16 targetSound;
 
@@ -554,6 +555,7 @@ void func_8002C7BC(TargetContext* targetCtx, Player* player, Actor* actorArg, Gl
                 Audio_PlaySoundGeneral(targetSound, &D_801333D4, 4, &D_801333E0, &D_801333E0, &D_801333E8);
             }
         }
+        */
     }
 
     if (unkActor == NULL) {
@@ -1838,8 +1840,33 @@ u32 func_8002F090(Actor* actor, f32 arg1) {
     return arg1 < D_80115FF8[actor->targetMode].rangeSq;
 }
 
+s32 Actor_IsTargetable(Actor* actor, Player* player) {
+    s32 targetMode = CVar_GetS32("gMoreTargets", 0);
+
+    if ((actor->update == NULL) || ((Player*)actor == player)) {
+        return false;
+    }
+
+    if (targetMode == 99) {
+        return true;
+    } else if (targetMode == 2) {
+        return CHECK_FLAG_ALL(actor->flags, ACTOR_FLAG_0) ||
+            actor->category == ACTORCAT_CHEST ||
+            actor->category == ACTORCAT_SWITCH ||
+            actor->id == ACTOR_EN_SW || actor->id == ACTOR_BOSS_GANON ||
+            actor->id == ACTOR_OBJ_HSBLOCK || actor->id == ACTOR_OBJ_SYOKUDAI;
+    } else if (targetMode == 1) {
+        return CHECK_FLAG_ALL(actor->flags, ACTOR_FLAG_0) ||
+            actor->category == ACTORCAT_CHEST ||
+            actor->category == ACTORCAT_SWITCH;
+    } else {
+        //original/default
+        return CHECK_FLAG_ALL(actor->flags, ACTOR_FLAG_0);
+    }
+}
+
 s32 func_8002F0C8(Actor* actor, Player* player, s32 flag) {
-    if ((actor->update == NULL) || !(actor->flags & ACTOR_FLAG_0)) {
+    if (!Actor_IsTargetable(actor, player)) {
         return true;
     }
 
@@ -3276,7 +3303,7 @@ void func_800328D4(GlobalContext* globalCtx, ActorContext* actorCtx, Player* pla
     sp84 = player->unk_664;
 
     while (actor != NULL) {
-        if ((actor->update != NULL) && ((Player*)actor != player) && CHECK_FLAG_ALL(actor->flags, ACTOR_FLAG_0)) {
+        if (Actor_IsTargetable(actor, player)) {
 
             // This block below is for determining the closest actor to player in determining the volume
             // used while playing enemy bgm music
