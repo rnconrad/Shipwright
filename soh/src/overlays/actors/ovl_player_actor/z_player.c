@@ -10741,11 +10741,11 @@ void Player_UpdateCommon(Player* this, GlobalContext* globalCtx, Input* input) {
     Collider_ResetQuadAC(globalCtx, &this->shieldQuad.base);
     Collider_ResetQuadAT(globalCtx, &this->shieldQuad.base);
 
-    if (CVar_GetS32("gAimAudioCues", 0)) {
+    if (CVar_GetS32("gBlind_AimAudioCues", 0)) {
         Player_UpdateAimCue(this, globalCtx);
     }
 
-    if (CVar_GetS32("gSpatialAudioCues", 0)) {
+    if (CVar_GetS32("gBlind_SpatialAudioCues", 0)) {
         Player_UpdateSpatialCues(this, globalCtx);
     }
 }
@@ -11057,7 +11057,7 @@ s16 func_8084ABD8(GlobalContext* globalCtx, Player* this, s32 arg2, s16 arg3) {
         temp2 = CLAMP(temp2, -3000, 3000);
         this->actor.focus.rot.y += temp2;
 
-        if (CVar_GetS32("gDPadLook", 0) && (sControlInput->press.button & (BTN_DUP | BTN_DRIGHT | BTN_DDOWN | BTN_DLEFT))) {
+        if (CVar_GetS32("gBlind_DPadLook", 0) && (sControlInput->press.button & (BTN_DUP | BTN_DRIGHT | BTN_DDOWN | BTN_DLEFT))) {
             s16 x = !!(sControlInput->cur.button & BTN_DRIGHT) - !!(sControlInput->cur.button & BTN_DLEFT);
             s16 y = !!(sControlInput->cur.button & BTN_DUP) - !!(sControlInput->cur.button & BTN_DDOWN);
             s16 rot = sDPadRotationLUT[y + 1][x + 1];

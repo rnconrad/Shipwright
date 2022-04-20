@@ -1991,7 +1991,7 @@ void func_80090D20(GlobalContext* globalCtx, s32 limbIndex, Gfx** dList, Vec3s* 
         }
     }
 
-    if (CVar_GetS32("gAimAudioCues", 0)) {
+    if (CVar_GetS32("gBlind_AimAudioCues", 0)) {
         Player_ComputeHandAimCue(this, globalCtx, limbIndex);
     }
 }
