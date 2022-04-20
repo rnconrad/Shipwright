@@ -7,6 +7,7 @@
 #include <stdio.h>
 
 #include <map>
+#include <set>
 #include <unordered_map>
 #include <vector>
 
@@ -27,6 +28,8 @@
 
 #include "../../luslog.h"
 #include "../StrHash64.h"
+#include "../../SohImGuiImpl.h"
+#include "../../Environment.h"
 
 // OTRTODO: fix header files for these
 extern "C" {
@@ -69,10 +72,6 @@ using namespace std;
 
 struct RGBA {
     uint8_t r, g, b, a;
-};
-
-struct XYWidthHeight {
-    uint16_t x, y, width, height;
 };
 
 struct LoadedVertex {
@@ -125,7 +124,7 @@ static struct RSP {
 } rsp;
 
 static struct RDP {
-    const uint8_t *palette;
+    const uint8_t *palettes[2];
     struct {
         const uint8_t *addr;
         uint8_t siz;
@@ -145,6 +144,7 @@ static struct RDP {
         uint8_t cms, cmt;
         uint8_t shifts, shiftt;
         uint16_t uls, ult, lrs, lrt; // U10.2
+        uint16_t tmem; // 0-511, in 64-bit word units
         uint32_t line_size_bytes;
         uint8_t palette;
         uint8_t tmem_index; // 0 or 1 for offset 0 kB or offset 2 kB, respectively
@@ -173,8 +173,16 @@ static struct RenderingState {
     TextureCacheNode *textures[2];
 } rendering_state;
 
+struct GfxDimensions gfx_current_window_dimensions;
 struct GfxDimensions gfx_current_dimensions;
 static struct GfxDimensions gfx_prev_dimensions;
+struct XYWidthHeight gfx_current_game_window_viewport;
+
+static bool game_renders_to_framebuffer;
+static int game_framebuffer;
+static int game_framebuffer_msaa_resolved;
+
+uint32_t gfx_msaa_level = 1;
 
 static bool dropped_frame;
 
@@ -196,6 +204,9 @@ struct FBInfo {
 static bool fbActive = 0;
 static map<int, FBInfo>::iterator active_fb;
 static map<int, FBInfo> framebuffers;
+
+static set<pair<float, float>> get_pixel_depth_pending;
+static map<pair<float, float>, uint16_t> get_pixel_depth_cached;
 
 #ifdef _MSC_VER
 // TODO: Properly implement for MSVC
@@ -490,8 +501,22 @@ void gfx_texture_cache_clear()
     gfx_texture_cache.lru.clear();
 }
 
-static bool gfx_texture_cache_lookup(int i, TextureCacheNode **n, const uint8_t *orig_addr, uint32_t fmt, uint32_t siz, uint32_t palette_index) {
-    TextureCacheKey key = { orig_addr, fmt, siz, palette_index };
+static bool gfx_texture_cache_lookup(int i, int tile) {
+    uint8_t fmt = rdp.texture_tile[tile].fmt;
+    uint8_t siz = rdp.texture_tile[tile].siz;
+    uint32_t tmem_index = rdp.texture_tile[tile].tmem_index;
+
+    TextureCacheNode** n = &rendering_state.textures[i];
+    const uint8_t* orig_addr = rdp.loaded_texture[tmem_index].addr;
+    uint8_t palette_index = rdp.texture_tile[tile].palette;
+
+    TextureCacheKey key;
+    if (fmt == G_IM_FMT_CI) {
+        key = { orig_addr, { rdp.palettes[0], rdp.palettes[1] }, fmt, siz, palette_index };
+    } else {
+        key = { orig_addr, { }, fmt, siz, palette_index };
+    }
+
     auto it = gfx_texture_cache.map.find(key);
 
     if (it != gfx_texture_cache.map.end()) {
@@ -735,7 +760,8 @@ static void import_texture_ci4(int tile) {
     uint32_t size_bytes = rdp.loaded_texture[rdp.texture_tile[tile].tmem_index].size_bytes;
     uint32_t full_image_line_size_bytes = rdp.loaded_texture[rdp.texture_tile[tile].tmem_index].full_image_line_size_bytes;
     uint32_t line_size_bytes = rdp.loaded_texture[rdp.texture_tile[tile].tmem_index].line_size_bytes;
-    const uint8_t *palette = rdp.palette + rdp.texture_tile[tile].palette * 16 * 2; // 16 pixel entries, 16 bits each
+    uint32_t pal_idx = rdp.texture_tile[tile].palette; // 0-15
+    const uint8_t *palette = rdp.palettes[pal_idx / 8] + (pal_idx % 8) * 16 * 2; // 16 pixel entries, 16 bits each
     SUPPORT_CHECK(full_image_line_size_bytes == line_size_bytes);
 
     for (uint32_t i = 0; i < size_bytes * 2; i++) {
@@ -770,7 +796,7 @@ static void import_texture_ci8(int tile) {
     {
         for (uint32_t k = 0; k < line_size_bytes; i++, k++, j++) {
             uint8_t idx = addr[j];
-            uint16_t col16 = (rdp.palette[idx * 2] << 8) | rdp.palette[idx * 2 + 1]; // Big endian load
+            uint16_t col16 = (rdp.palettes[idx / 128][(idx % 128) * 2] << 8) | rdp.palettes[idx / 128][(idx % 128) * 2 + 1]; // Big endian load
             uint8_t a = col16 & 1;
             uint8_t r = col16 >> 11;
             uint8_t g = (col16 >> 6) & 0x1f;
@@ -815,7 +841,7 @@ static void import_texture(int i, int tile) {
     // if (ModInternal::callBindHook(0))
     //     return;
 
-    if (gfx_texture_cache_lookup(i, &rendering_state.textures[i], rdp.loaded_texture[tmem_index].addr, fmt, siz, rdp.texture_tile[tile].palette))
+    if (gfx_texture_cache_lookup(i, tile))
     {
         return;
     }
@@ -1310,11 +1336,11 @@ static void gfx_sp_tri1(uint8_t vtx1_idx, uint8_t vtx2_idx, uint8_t vtx3_idx, bo
 
     gfx_rapi->shader_get_info(prg, &num_inputs, used_textures);
 
-    bool z_is_from_0_to_1 = gfx_rapi->z_is_from_0_to_1();
+    struct GfxClipParameters clip_parameters = gfx_rapi->get_clip_parameters();
 
     for (int i = 0; i < 3; i++) {
         float z = v_arr[i]->z, w = v_arr[i]->w;
-        if (z_is_from_0_to_1) {
+        if (clip_parameters.z_is_from_0_to_1) {
             z = (z + w) / 2.0f;
         }
 
@@ -1324,7 +1350,7 @@ static void gfx_sp_tri1(uint8_t vtx1_idx, uint8_t vtx2_idx, uint8_t vtx3_idx, bo
         }
 
         buf_vbo[buf_vbo_len++] = v_arr[i]->x;
-        buf_vbo[buf_vbo_len++] = v_arr[i]->y;
+        buf_vbo[buf_vbo_len++] = clip_parameters.invert_y ? -v_arr[i]->y : v_arr[i]->y;
         buf_vbo[buf_vbo_len++] = z;
         buf_vbo[buf_vbo_len++] = w;
 
@@ -1475,6 +1501,27 @@ static void gfx_sp_geometry_mode(uint32_t clear, uint32_t set) {
     rsp.geometry_mode |= set;
 }
 
+static void gfx_adjust_viewport_or_scissor(XYWidthHeight *area) {
+    if (!fbActive) {
+        area->width *= RATIO_X;
+        area->height *= RATIO_Y;
+        area->x *= RATIO_X;
+        area->y = SCREEN_HEIGHT - area->y;
+        area->y *= RATIO_Y;
+
+        if (!game_renders_to_framebuffer || (gfx_msaa_level > 1 && gfx_current_dimensions.width == gfx_current_game_window_viewport.width && gfx_current_dimensions.height == gfx_current_game_window_viewport.height)) {
+            area->x += gfx_current_game_window_viewport.x;
+            area->y += gfx_current_window_dimensions.height - (gfx_current_game_window_viewport.y + gfx_current_game_window_viewport.height);
+        }
+    } else {
+        area->width *= RATIO_Y;
+        area->height *= RATIO_Y;
+        area->x *= RATIO_Y;
+        area->y = active_fb->second.orig_height - area->y;
+        area->y *= RATIO_Y;
+    }
+}
+
 static void gfx_calc_and_set_viewport(const Vp_t *viewport) {
     // 2 bits fraction
     float width = 2.0f * viewport->vscale[0] / 4.0f;
@@ -1482,24 +1529,12 @@ static void gfx_calc_and_set_viewport(const Vp_t *viewport) {
     float x = (viewport->vtrans[0] / 4.0f) - width / 2.0f;
     float y = ((viewport->vtrans[1] / 4.0f) + height / 2.0f);
 
-    if (!fbActive) {
-        width *= RATIO_X;
-        height *= RATIO_Y;
-        x *= RATIO_X;
-        y = SCREEN_HEIGHT - y;
-        y *= RATIO_Y;
-    } else {
-        width *= RATIO_Y;
-        height *= RATIO_Y;
-        x *= RATIO_Y;
-        y = active_fb->second.orig_height - y;
-        y *= RATIO_Y;
-    }
-
     rdp.viewport.x = x;
     rdp.viewport.y = y;
     rdp.viewport.width = width;
     rdp.viewport.height = height;
+
+    gfx_adjust_viewport_or_scissor(&rdp.viewport);
 
     rdp.viewport_or_scissor_changed = true;
 }
@@ -1569,11 +1604,6 @@ static void gfx_sp_texture(uint16_t sc, uint16_t tc, uint8_t level, uint8_t tile
         rdp.textures_changed[1] = true;
     }
 
-    if (tile > 8)
-    {
-        int bp = 0;
-    }
-
     rdp.first_tile_index = tile;
 }
 
@@ -1583,24 +1613,12 @@ static void gfx_dp_set_scissor(uint32_t mode, uint32_t ulx, uint32_t uly, uint32
     float width = (lrx - ulx) / 4.0f;
     float height = (lry - uly) / 4.0f;
 
-    if (!fbActive) {
-        x *= RATIO_X;
-        y = SCREEN_HEIGHT - y;
-        y *= RATIO_Y;
-        width *= RATIO_X;
-        height *= RATIO_Y;
-    } else {
-        width *= RATIO_Y;
-        height *= RATIO_Y;
-        x *= RATIO_Y;
-        y = active_fb->second.orig_height - y;
-        y *= RATIO_Y;
-    }
-
     rdp.scissor.x = x;
     rdp.scissor.y = y;
     rdp.scissor.width = width;
     rdp.scissor.height = height;
+
+    gfx_adjust_viewport_or_scissor(&rdp.scissor);
 
     rdp.viewport_or_scissor_changed = true;
 }
@@ -1638,6 +1656,7 @@ static void gfx_dp_set_tile(uint8_t fmt, uint32_t siz, uint32_t line, uint32_t t
         int bp = 0;
     }
 
+    rdp.texture_tile[tile].tmem = tmem;
     //rdp.texture_tile[tile].tmem_index = tmem / 256; // tmem is the 64-bit word offset, so 256 words means 2 kB
     rdp.texture_tile[tile].tmem_index = tmem != 0; // assume one texture is loaded at address 0 and another texture at any other address
     rdp.textures_changed[0] = true;
@@ -1654,10 +1673,19 @@ static void gfx_dp_set_tile_size(uint8_t tile, uint16_t uls, uint16_t ult, uint1
 }
 
 static void gfx_dp_load_tlut(uint8_t tile, uint32_t high_index) {
-    //SUPPORT_CHECK(tile == G_TX_LOADTILE);
-    //SUPPORT_CHECK(rdp.texture_to_load.siz == G_IM_SIZ_16b);
+    SUPPORT_CHECK(tile == G_TX_LOADTILE);
+    SUPPORT_CHECK(rdp.texture_to_load.siz == G_IM_SIZ_16b);
 
-    rdp.palette = rdp.texture_to_load.addr;
+    SUPPORT_CHECK((rdp.texture_tile[tile].tmem == 256 && (high_index <= 127 || high_index == 255)) || (rdp.texture_tile[tile].tmem == 384 && high_index == 127));
+
+    if (rdp.texture_tile[tile].tmem == 256) {
+        rdp.palettes[0] = rdp.texture_to_load.addr;
+        if (high_index == 255) {
+            rdp.palettes[1] = rdp.texture_to_load.addr + 2 * 128;
+        }
+    } else {
+        rdp.palettes[1] = rdp.texture_to_load.addr;
+    }
 }
 
 static void gfx_dp_load_block(uint8_t tile, uint32_t uls, uint32_t ult, uint32_t lrs, uint32_t dxt) {
@@ -1861,9 +1889,11 @@ static void gfx_draw_rectangle(int32_t ulx, int32_t uly, int32_t lrx, int32_t lr
     ur->w = 1.0f;
 
     // The coordinates for texture rectangle shall bypass the viewport setting
-    struct XYWidthHeight default_viewport = { 0, 0, gfx_current_dimensions.width, gfx_current_dimensions.height };
+    struct XYWidthHeight default_viewport = { 0, SCREEN_HEIGHT, SCREEN_WIDTH, SCREEN_HEIGHT };
     struct XYWidthHeight viewport_saved = rdp.viewport;
     uint32_t geometry_mode_saved = rsp.geometry_mode;
+
+    gfx_adjust_viewport_or_scissor(&default_viewport);
 
     rdp.viewport = default_viewport;
     rdp.viewport_or_scissor_changed = true;
@@ -2381,12 +2411,14 @@ static void gfx_run_dl(Gfx* cmd) {
                 cmd++;
                 uint64_t hash = ((uint64_t)cmd->words.w0 << 32) + (uint64_t)cmd->words.w1;
                 ResourceMgr_GetNameByCRC(hash, fileName);
+
+
+#if _DEBUG && 0
                 char* tex = ResourceMgr_LoadTexByCRC(hash);
-
-
-#if _DEBUG
-                //ResourceMgr_GetNameByCRC(hash, fileName);
-                //printf("G_SETTIMG_OTR: %s, %08X\n", fileName, hash);
+                ResourceMgr_GetNameByCRC(hash, fileName);
+                printf("G_SETTIMG_OTR: %s, %08X\n", fileName, hash);
+#else
+                char* tex = NULL;
 #endif
 
                 if (addr != NULL)
@@ -2428,14 +2460,15 @@ static void gfx_run_dl(Gfx* cmd) {
                 gfx_flush();
                 fbActive = 1;
                 active_fb = framebuffers.find(cmd->words.w1);
-                gfx_rapi->set_framebuffer(active_fb->first);
+                gfx_rapi->start_draw_to_framebuffer(active_fb->first, (float)active_fb->second.applied_height / active_fb->second.orig_height);
+                gfx_rapi->clear_framebuffer();
             }
                 break;
             case G_RESETFB:
             {
                 gfx_flush();
                 fbActive = 0;
-                gfx_rapi->reset_framebuffer();
+                gfx_rapi->start_draw_to_framebuffer(game_renders_to_framebuffer ? game_framebuffer : 0, (float)gfx_current_dimensions.height / SCREEN_HEIGHT);
                 break;
             }
             break;
@@ -2519,7 +2552,7 @@ static void gfx_run_dl(Gfx* cmd) {
                 gfx_dp_texture_rectangle(ulx, uly, lrx, lry, tile, uls, ult, dsdx, dtdy, opcode == G_TEXRECTFLIP);
                 break;
             }
-			case G_TEXRECT_WIDE:
+            case G_TEXRECT_WIDE:
             {
                 int32_t lrx, lry, tile, ulx, uly;
                 uint32_t uls, ult, dsdx, dtdy;
@@ -2602,9 +2635,12 @@ void gfx_init(struct GfxWindowManagerAPI *wapi, struct GfxRenderingAPI *rapi, co
     gfx_rapi = rapi;
     gfx_wapi->init(game_name, start_in_fullscreen);
     gfx_rapi->init();
+    gfx_rapi->update_framebuffer_parameters(0, SCREEN_WIDTH, SCREEN_HEIGHT, 1, false, true, true, true);
     gfx_current_dimensions.internal_mul = 1;
     gfx_current_dimensions.width = SCREEN_WIDTH;
     gfx_current_dimensions.height = SCREEN_HEIGHT;
+    game_framebuffer = gfx_rapi->create_framebuffer();
+    game_framebuffer_msaa_resolved = gfx_rapi->create_framebuffer();
 
     for (int i = 0; i < 16; i++)
         segmentPointers[i] = NULL;
@@ -2653,7 +2689,8 @@ struct GfxRenderingAPI *gfx_get_current_rendering_api(void) {
 
 void gfx_start_frame(void) {
     gfx_wapi->handle_events();
-    // gfx_wapi->get_dimensions(&gfx_current_dimensions.width, &gfx_current_dimensions.height);
+    gfx_wapi->get_dimensions(&gfx_current_window_dimensions.width, &gfx_current_window_dimensions.height);
+    SohImGui::DrawMainMenuAndCalculateGameSize();
     if (gfx_current_dimensions.height == 0) {
         // Avoid division by zero
         gfx_current_dimensions.height = 1;
@@ -2665,13 +2702,29 @@ void gfx_start_frame(void) {
             uint32_t width = fb.second.orig_width, height = fb.second.orig_height;
             gfx_adjust_width_height_for_scale(width, height);
             if (width != fb.second.applied_width || height != fb.second.applied_height) {
-                gfx_rapi->resize_framebuffer(fb.first, width, height);
+                gfx_rapi->update_framebuffer_parameters(fb.first, width, height, 1, true, true, true, true);
                 fb.second.applied_width = width;
                 fb.second.applied_height = height;
             }
         }
     }
     gfx_prev_dimensions = gfx_current_dimensions;
+
+    bool different_size = gfx_current_dimensions.width != gfx_current_game_window_viewport.width || gfx_current_dimensions.height != gfx_current_game_window_viewport.height;
+    if (different_size || gfx_msaa_level > 1) {
+        game_renders_to_framebuffer = true;
+        if (different_size) {
+            gfx_rapi->update_framebuffer_parameters(game_framebuffer, gfx_current_dimensions.width, gfx_current_dimensions.height, gfx_msaa_level, true, true, true, true);
+        } else {
+            // MSAA framebuffer needs to be resolved to an equally sized target when complete, which must therefore match the window size
+            gfx_rapi->update_framebuffer_parameters(game_framebuffer, gfx_current_window_dimensions.width, gfx_current_window_dimensions.height, gfx_msaa_level, false, true, true, true);
+        }
+        if (gfx_msaa_level > 1 && different_size) {
+            gfx_rapi->update_framebuffer_parameters(game_framebuffer_msaa_resolved, gfx_current_dimensions.width, gfx_current_dimensions.height, 1, false, false, false, false);
+        }
+    } else {
+        game_renders_to_framebuffer = false;
+    }
 
     fbActive = 0;
 }
@@ -2680,17 +2733,44 @@ void gfx_run(Gfx *commands) {
     gfx_sp_reset();
 
     //puts("New frame");
+    get_pixel_depth_pending.clear();
+    get_pixel_depth_cached.clear();
 
     if (!gfx_wapi->start_frame()) {
         dropped_frame = true;
+        SohImGui::DrawFramebufferAndGameInput();
+        SohImGui::CancelFrame();
         return;
     }
     dropped_frame = false;
 
     double t0 = gfx_wapi->get_time();
+    gfx_rapi->update_framebuffer_parameters(0, gfx_current_window_dimensions.width, gfx_current_window_dimensions.height, 1, false, true, true, !game_renders_to_framebuffer);
     gfx_rapi->start_frame();
+    gfx_rapi->start_draw_to_framebuffer(game_renders_to_framebuffer ? game_framebuffer : 0, (float)gfx_current_dimensions.height / SCREEN_HEIGHT);
+    gfx_rapi->clear_framebuffer();
     gfx_run_dl(commands);
     gfx_flush();
+    SohUtils::saveEnvironmentVar("framebuffer", string());
+    if (game_renders_to_framebuffer) {
+        gfx_rapi->start_draw_to_framebuffer(0, 1);
+        gfx_rapi->clear_framebuffer();
+
+        if (gfx_msaa_level > 1) {
+            bool different_size = gfx_current_dimensions.width != gfx_current_game_window_viewport.width || gfx_current_dimensions.height != gfx_current_game_window_viewport.height;
+
+            if (different_size) {
+                gfx_rapi->resolve_msaa_color_buffer(game_framebuffer_msaa_resolved, game_framebuffer);
+                SohUtils::saveEnvironmentVar("framebuffer", std::to_string((uintptr_t)gfx_rapi->get_framebuffer_texture_id(game_framebuffer_msaa_resolved)));
+            } else {
+                gfx_rapi->resolve_msaa_color_buffer(0, game_framebuffer);
+            }
+        } else {
+            SohUtils::saveEnvironmentVar("framebuffer", std::to_string((uintptr_t)gfx_rapi->get_framebuffer_texture_id(game_framebuffer)));
+        }
+    }
+    SohImGui::DrawFramebufferAndGameInput();
+    SohImGui::Render();
     double t1 = gfx_wapi->get_time();
     //printf("Process %f %f\n", t1, t1 - t0);
     gfx_rapi->end_frame();
@@ -2711,21 +2791,47 @@ void gfx_set_framedivisor(int divisor) {
 int gfx_create_framebuffer(uint32_t width, uint32_t height) {
     uint32_t orig_width = width, orig_height = height;
     gfx_adjust_width_height_for_scale(width, height);
-    int fb = gfx_rapi->create_framebuffer(width, height);
+    int fb = gfx_rapi->create_framebuffer();
+    gfx_rapi->update_framebuffer_parameters(fb, width, height, 1, true, true, true, true);
     framebuffers[fb] = { orig_width, orig_height, width, height };
     return fb;
 }
 
-void gfx_set_framebuffer(int fb)
-{
-    gfx_rapi->set_framebuffer(fb);
+void gfx_set_framebuffer(int fb, float noise_scale) {
+    gfx_rapi->start_draw_to_framebuffer(fb, noise_scale);
+    gfx_rapi->clear_framebuffer();
 }
 
-void gfx_reset_framebuffer()
-{
-    gfx_rapi->reset_framebuffer();
+void gfx_reset_framebuffer() {
+    gfx_rapi->start_draw_to_framebuffer(0, (float)gfx_current_dimensions.height / SCREEN_HEIGHT);
+}
+
+static void adjust_pixel_depth_coordinates(float& x, float& y) {
+    x = x * RATIO_Y - (SCREEN_WIDTH * RATIO_Y - gfx_current_dimensions.width) / 2;
+    y *= RATIO_Y;
+    if (!game_renders_to_framebuffer || (gfx_msaa_level > 1 && gfx_current_dimensions.width == gfx_current_game_window_viewport.width && gfx_current_dimensions.height == gfx_current_game_window_viewport.height)) {
+        x += gfx_current_game_window_viewport.x;
+        y += gfx_current_window_dimensions.height - (gfx_current_game_window_viewport.y + gfx_current_game_window_viewport.height);
+    }
+}
+
+void gfx_get_pixel_depth_prepare(float x, float y) {
+    adjust_pixel_depth_coordinates(x, y);
+    get_pixel_depth_pending.emplace(x, y);
 }
 
 uint16_t gfx_get_pixel_depth(float x, float y) {
-    return gfx_rapi->get_pixel_depth(x * RATIO_Y - (SCREEN_WIDTH * RATIO_Y - gfx_current_dimensions.width) / 2, y * RATIO_Y);
+    adjust_pixel_depth_coordinates(x, y);
+
+    if (auto it = get_pixel_depth_cached.find(make_pair(x, y)); it != get_pixel_depth_cached.end()) {
+        return it->second;
+    }
+
+    get_pixel_depth_pending.emplace(x, y);
+
+    map<pair<float, float>, uint16_t> res = gfx_rapi->get_pixel_depth(game_renders_to_framebuffer ? game_framebuffer : 0, get_pixel_depth_pending);
+    get_pixel_depth_cached.merge(res);
+    get_pixel_depth_pending.clear();
+
+    return get_pixel_depth_cached.find(make_pair(x, y))->second;
 }
