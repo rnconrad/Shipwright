@@ -208,8 +208,9 @@ void Message_HandleChoiceSelection(GlobalContext* globalCtx, u8 numChoices) {
     static s16 sAnalogStickHeld = false;
     MessageContext* msgCtx = &globalCtx->msgCtx;
     Input* input = &globalCtx->state.input[0];
+    bool dpad = CVar_GetS32("gDpadOcarinaText", 0);
 
-    if (input->rel.stick_y >= 30 && !sAnalogStickHeld) {
+    if ((input->rel.stick_y >= 30 && !sAnalogStickHeld) || (dpad && CHECK_BTN_ALL(input->press.button, BTN_DUP))) {
         sAnalogStickHeld = true;
         msgCtx->choiceIndex--;
         if (msgCtx->choiceIndex > 128) {
@@ -217,7 +218,7 @@ void Message_HandleChoiceSelection(GlobalContext* globalCtx, u8 numChoices) {
         } else {
             Audio_PlaySoundGeneral(NA_SE_SY_CURSOR, &D_801333D4, 4, &D_801333E0, &D_801333E0, &D_801333E8);
         }
-    } else if (input->rel.stick_y <= -30 && !sAnalogStickHeld) {
+    } else if ((input->rel.stick_y <= -30 && !sAnalogStickHeld) || (dpad && CHECK_BTN_ALL(input->press.button, BTN_DDOWN))) {
         sAnalogStickHeld = true;
         msgCtx->choiceIndex++;
         if (msgCtx->choiceIndex > numChoices) {
@@ -3150,7 +3151,7 @@ void Message_Update(GlobalContext* globalCtx) {
     Input* input = &globalCtx->state.input[0];
     s16 var;
     s16 focusScreenPosX;
-    s16 averageY;
+    s16 averageY = 0;
     s16 playerFocusScreenPosY;
     s16 actorFocusScreenPosY;
 
@@ -3184,7 +3185,7 @@ void Message_Update(GlobalContext* globalCtx) {
         return;
     }
 
-    if (CVar_GetS32("gMessageTTS", 0) != 0) {
+    if (CVar_GetS32("gBlind_MessageTTS", 0) != 0) {
         Message_TTS_Update(globalCtx);
     }
 

@@ -516,46 +516,6 @@ void func_8002C7BC(TargetContext* targetCtx, Player* player, Actor* actorArg, Gl
         targetCtx->arrowPointedActor = unkActor;
         targetCtx->activeCategory = actorCategory;
         targetCtx->unk_40 = 1.0f;
-
-        /*
-        if (CVar_GetS32("gBlindMode", 0)) {
-            u16 targetSound;
-
-            if (targetCtx->arrowPointedActor != NULL) {
-                switch (targetCtx->activeCategory) {
-                    case ACTORCAT_PROP:
-                        targetSound = NA_SE_VO_NA_HELLO_1;
-                        break;
-                    case ACTORCAT_EXPLOSIVE:
-                        targetSound = NA_SE_VO_NA_HELLO_3;
-                        break;
-                    case ACTORCAT_DOOR:
-                        targetSound = NA_SE_VO_NA_HELLO_2;
-                        break;
-                    case ACTORCAT_CHEST:
-                        targetSound = NA_SE_VO_NA_HELLO_1;
-                        break;
-                    case ACTORCAT_SWITCH:
-                        targetSound = NA_SE_VO_NA_HELLO_1;
-                        break;
-                    case ACTORCAT_NPC:
-                        targetSound = NA_SE_VO_NA_HELLO_3;
-                        break;
-                    case ACTORCAT_ENEMY:
-                        targetSound = NA_SE_VO_NA_HELLO_0;
-                        break;
-                    case ACTORCAT_BOSS:
-                        targetSound = NA_SE_VO_NA_HELLO_0;
-                        break;
-                    default:
-                        targetSound = NA_SE_VO_NA_HELLO_2;
-                        break;
-                }
-
-                Audio_PlaySoundGeneral(targetSound, &D_801333D4, 4, &D_801333E0, &D_801333E0, &D_801333E8);
-            }
-        }
-        */
     }
 
     if (unkActor == NULL) {
@@ -816,7 +776,7 @@ void TitleCard_InitBossName(GlobalContext* globalCtx, TitleCardContext* titleCtx
     titleCtx->durationTimer = 80;
     titleCtx->delayTimer = 0;
 
-    if (bossActorId != 0 && CVar_GetS32("gMessageTTS", 0)) {
+    if (bossActorId != 0 && CVar_GetS32("gBlind_MessageTTS", 0)) {
         sTitleCardText = OTRMessage_GetAccessibilityText("text/accessibility_text/accessibility_text_eng",
                                                          0x1000 + bossActorId, NULL);
     }
@@ -848,9 +808,9 @@ void TitleCard_InitPlaceName(GlobalContext* globalCtx, TitleCardContext* titleCt
             break;
         case SCENE_JYASINZOU:
             texture = gSpiritTempleTitleCardENGTex;
-            break; 
+            break;
         case SCENE_HAKADAN:
-            texture = gSpiritTempleTitleCardENGTex;
+            texture = gShadowTempleTitleCardENGTex;
             break;
         case SCENE_HAKADANCH:
             texture = gBottomOfTheWellTitleCardENGTex;
@@ -1038,7 +998,7 @@ void TitleCard_InitPlaceName(GlobalContext* globalCtx, TitleCardContext* titleCt
     titleCtx->durationTimer = 80;
     titleCtx->delayTimer = delay;
 
-    if (CVar_GetS32("gMessageTTS", 0)) {
+    if (CVar_GetS32("gBlind_MessageTTS", 0)) {
         sTitleCardText =
             OTRMessage_GetAccessibilityText("text/accessibility_text/accessibility_text_eng", 0x0300 + globalCtx->sceneNum, NULL);
     }
@@ -1046,7 +1006,7 @@ void TitleCard_InitPlaceName(GlobalContext* globalCtx, TitleCardContext* titleCt
 
 void TitleCard_Update(GlobalContext* globalCtx, TitleCardContext* titleCtx) {
     if (DECR(titleCtx->delayTimer) == 0) {
-        if (titleCtx->durationTimer == 80 && CVar_GetS32("gMessageTTS", 0)) {
+        if (titleCtx->durationTimer == 80 && CVar_GetS32("gBlind_MessageTTS", 0)) {
             OTRTextToSpeechCallback(sTitleCardText);
         }
 

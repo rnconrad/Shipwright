@@ -74,6 +74,7 @@ void KaleidoScope_DrawQuestStatus(GlobalContext* globalCtx, GraphicsContext* gfx
     s16 pad2;
     s16 phi_s0_2;
     s16 sp208[3];
+    bool dpad = CVar_GetS32("gDpadPauseName", 0);
 
     OPEN_DISPS(gfxCtx, "../z_kaleido_collect.c", 248);
 
@@ -84,12 +85,14 @@ void KaleidoScope_DrawQuestStatus(GlobalContext* globalCtx, GraphicsContext* gfx
         if (pauseCtx->cursorSpecialPos == 0) {
             pauseCtx->nameColorSet = 0;
 
-            if ((pauseCtx->state != 6) || ((pauseCtx->stickRelX == 0) && (pauseCtx->stickRelY == 0))) {
+            if ((pauseCtx->state != 6) || ((pauseCtx->stickRelX == 0) && (pauseCtx->stickRelY == 0) && 
+                (!dpad || !CHECK_BTN_ANY(input->press.button, BTN_DLEFT | BTN_DRIGHT | BTN_DDOWN | BTN_DUP))))
+            {
                 sp216 = pauseCtx->cursorSlot[PAUSE_QUEST];
             } else {
                 phi_s3 = pauseCtx->cursorPoint[PAUSE_QUEST];
 
-                if (pauseCtx->stickRelX < -30) {
+                if ((pauseCtx->stickRelX < -30) || (dpad && CHECK_BTN_ALL(input->press.button, BTN_DLEFT))) {
                     phi_s0 = D_8082A1AC[phi_s3][2];
                     if (phi_s0 == -3) {
                         KaleidoScope_MoveCursorToSpecialPos(globalCtx, PAUSE_CURSOR_PAGE_LEFT);
@@ -102,7 +105,7 @@ void KaleidoScope_DrawQuestStatus(GlobalContext* globalCtx, GraphicsContext* gfx
                             phi_s0 = D_8082A1AC[phi_s0][2];
                         }
                     }
-                } else if (pauseCtx->stickRelX > 30) {
+                } else if ((pauseCtx->stickRelX > 30) || (dpad && CHECK_BTN_ALL(input->press.button, BTN_DRIGHT))) {
                     phi_s0 = D_8082A1AC[phi_s3][3];
                     if (phi_s0 == -2) {
                         KaleidoScope_MoveCursorToSpecialPos(globalCtx, PAUSE_CURSOR_PAGE_RIGHT);
@@ -117,7 +120,7 @@ void KaleidoScope_DrawQuestStatus(GlobalContext* globalCtx, GraphicsContext* gfx
                     }
                 }
 
-                if (pauseCtx->stickRelY < -30) {
+                if ((pauseCtx->stickRelY < -30) || (dpad && CHECK_BTN_ALL(input->press.button, BTN_DDOWN))) {
                     phi_s0 = D_8082A1AC[phi_s3][1];
                     while (phi_s0 >= 0) {
                         if ((s16)KaleidoScope_UpdateQuestStatusPoint(pauseCtx, phi_s0) != 0) {
@@ -125,7 +128,7 @@ void KaleidoScope_DrawQuestStatus(GlobalContext* globalCtx, GraphicsContext* gfx
                         }
                         phi_s0 = D_8082A1AC[phi_s0][1];
                     }
-                } else if (pauseCtx->stickRelY > 30) {
+                } else if ((pauseCtx->stickRelY > 30) || (dpad && CHECK_BTN_ALL(input->press.button, BTN_DUP))) {
                     phi_s0 = D_8082A1AC[phi_s3][0];
                     while (phi_s0 >= 0) {
                         if ((s16)KaleidoScope_UpdateQuestStatusPoint(pauseCtx, phi_s0) != 0) {
@@ -150,13 +153,12 @@ void KaleidoScope_DrawQuestStatus(GlobalContext* globalCtx, GraphicsContext* gfx
                             osSyncPrintf("111 ccc=%d\n", phi_s0_2);
                         } else {
                             phi_s0_2 = pauseCtx->cursorPoint[PAUSE_QUEST] + 0x5A;
-                            osSyncPrintf("222 ccc=%d (%d, %d, %d)\n", phi_s0_2, pauseCtx->cursorPoint[PAUSE_QUEST],
-                                         0x12, 0x6C);
+                            osSyncPrintf("222 ccc=%d (%d, %d, %d)\n", phi_s0_2, pauseCtx->cursorPoint[PAUSE_QUEST], 0x12,
+                                        0x6C);
                         }
                     } else {
                         phi_s0_2 = PAUSE_ITEM_NONE;
-                        osSyncPrintf("999 ccc=%d (%d,  %d)\n", PAUSE_ITEM_NONE, pauseCtx->cursorPoint[PAUSE_QUEST],
-                                     0x18);
+                        osSyncPrintf("999 ccc=%d (%d,  %d)\n", PAUSE_ITEM_NONE, pauseCtx->cursorPoint[PAUSE_QUEST], 0x18);
                     }
                 } else {
                     if ((gSaveContext.inventory.questItems & 0xF0000000) != 0) {
@@ -165,28 +167,27 @@ void KaleidoScope_DrawQuestStatus(GlobalContext* globalCtx, GraphicsContext* gfx
                         phi_s0_2 = PAUSE_ITEM_NONE;
                     }
                     osSyncPrintf("888 ccc=%d (%d,  %d,  %x)\n", phi_s0_2, pauseCtx->cursorPoint[PAUSE_QUEST], 0x72,
-                                 gSaveContext.inventory.questItems & 0xF0000000);
+                                gSaveContext.inventory.questItems & 0xF0000000);
                 }
 
                 sp216 = pauseCtx->cursorPoint[PAUSE_QUEST];
                 pauseCtx->cursorItem[pauseCtx->pageIndex] = phi_s0_2;
                 pauseCtx->cursorSlot[pauseCtx->pageIndex] = sp216;
 
-                if (CVar_GetS32("gMessageTTS", 0)) {
+                if (CVar_GetS32("gBlind_MessageTTS", 0)) {
                     u8 arg[8]; // at least big enough where no s8 string will overflow
                     switch (pauseCtx->cursorItem[PAUSE_QUEST]) {
                         case ITEM_SKULL_TOKEN:
                             sprintf(arg, "%d", gSaveContext.inventory.gsTokens);
                             break;
                         case ITEM_HEART_CONTAINER:
-                            sprintf(arg, "%d of 4", (((gSaveContext.inventory.questItems & 0xF0000000) & 0xF0000000) >> 0x1C));
+                            sprintf(arg, "%d", (((gSaveContext.inventory.questItems & 0xF0000000) & 0xF0000000) >> 0x1C));
                             break;
                         default:
                             arg[0] = '\0';
                     }
-                    OTRTextToSpeechCallback(OTRMessage_GetAccessibilityText("text/accessibility_text/accessibility_text_eng",
-                                                                            pauseCtx->cursorItem[PAUSE_QUEST]),
-                                                                            arg);
+                    OTRTextToSpeechCallback(
+                        OTRMessage_GetAccessibilityText("text/accessibility_text/accessibility_text_eng", pauseCtx->cursorItem[PAUSE_QUEST], arg));
                 }
             }
 
@@ -232,7 +233,7 @@ void KaleidoScope_DrawQuestStatus(GlobalContext* globalCtx, GraphicsContext* gfx
                 }
             }
         } else if (pauseCtx->cursorSpecialPos == PAUSE_CURSOR_PAGE_LEFT) {
-            if (pauseCtx->stickRelX > 30) {
+            if ((pauseCtx->stickRelX > 30) || (dpad && CHECK_BTN_ALL(input->press.button, BTN_DRIGHT))) {
                 pauseCtx->cursorPoint[PAUSE_QUEST] = 0x15;
                 pauseCtx->nameDisplayTimer = 0;
                 pauseCtx->cursorSpecialPos = 0;
@@ -249,7 +250,7 @@ void KaleidoScope_DrawQuestStatus(GlobalContext* globalCtx, GraphicsContext* gfx
                 pauseCtx->cursorSlot[pauseCtx->pageIndex] = sp216;
             }
         } else {
-            if (pauseCtx->stickRelX < -30) {
+            if ((pauseCtx->stickRelX < -30) || (dpad && CHECK_BTN_ALL(input->press.button, BTN_DLEFT))) {
                 pauseCtx->cursorPoint[PAUSE_QUEST] = 0;
                 pauseCtx->nameDisplayTimer = 0;
                 pauseCtx->cursorSpecialPos = 0;
@@ -666,9 +667,9 @@ void KaleidoScope_DrawQuestStatus(GlobalContext* globalCtx, GraphicsContext* gfx
             phi_s0 = 0;
             for (sp21A = 0; sp21A < 3; sp21A++, sp218 += 4) {
                 if ((sp21A >= 2) || (sp208[sp21A] != 0) || (phi_s0 != 0)) {
-                    gDPLoadTextureBlock(POLY_KAL_DISP++, digitTextures[sp208[sp21A]], G_IM_FMT_I,
-                                        G_IM_SIZ_8b, 8, 16, 0, G_TX_NOMIRROR | G_TX_WRAP, G_TX_NOMIRROR | G_TX_WRAP,
-                                        G_TX_NOMASK, G_TX_NOMASK, G_TX_NOLOD, G_TX_NOLOD);
+                    gDPLoadTextureBlock(POLY_KAL_DISP++, digitTextures[sp208[sp21A]], G_IM_FMT_I, G_IM_SIZ_8b, 8, 16, 0,
+                                        G_TX_NOMIRROR | G_TX_WRAP, G_TX_NOMIRROR | G_TX_WRAP, G_TX_NOMASK, G_TX_NOMASK,
+                                        G_TX_NOLOD, G_TX_NOLOD);
 
                     gSP1Quadrangle(POLY_KAL_DISP++, sp218, sp218 + 2, sp218 + 3, sp218 + 1, 0);
 
