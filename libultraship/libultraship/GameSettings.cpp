@@ -27,6 +27,7 @@ namespace Game {
     const std::string AudioSection = AUDIO_SECTION;
     const std::string ControllerSection = CONTROLLER_SECTION;
     const std::string EnhancementSection = ENHANCEMENTS_SECTION;
+    const std::string AccessibilitySection = ACCESSIBILITY_SECTION;
 
     void UpdateAudio() {
         Audio_SetGameVolume(SEQ_BGM_MAIN, Settings.audio.music_main);
@@ -87,6 +88,9 @@ namespace Game {
         Settings.controller.input_enabled = stob(Conf[ControllerSection]["input_enabled"]);
         CVar_SetS32(const_cast<char*>("gInputEnabled"), Settings.controller.input_enabled);
 
+        Settings.accessibility.enable_tts = stob(Conf[AccessibilitySection]["enable_tts"]);
+        CVar_SetS32(const_cast<char*>("gMessageTTS"), Settings.accessibility.enable_tts);
+
         UpdateAudio();
     }
 
@@ -117,6 +121,9 @@ namespace Game {
         Conf[ControllerSection]["rumble_strength"]  = std::to_string(Settings.controller.rumble_strength);
         Conf[ControllerSection]["input_scale"]   = std::to_string(Settings.controller.input_scale);
         Conf[ControllerSection]["input_enabled"] = std::to_string(Settings.controller.input_enabled);
+
+        // Accessibility
+        Conf[AccessibilitySection]["enable_tts"] = std::to_string(Settings.accessibility.enable_tts);
 
         Conf.Save();
     }

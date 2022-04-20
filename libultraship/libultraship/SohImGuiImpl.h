@@ -52,6 +52,11 @@ namespace SohImGui {
     void Update(EventImpl event);
     void Draw(void);
     void ShowCursor(bool hide, Dialogues w);
+    void ReadText(std::string text, bool force);
     void BindCmd(const std::string& cmd, CommandEntry entry);
+    bool BeginMenu(const char* label, bool enabled, int first_or_last_item);
+    bool Checkbox(const char* label, bool* v);
+    bool MenuItem(const char* label, const char* shortcut, bool* p_selected, bool enabled);
+    bool SliderFloat(const char* label, const char* str_id, float* v, float v_min, float v_max, const char* format, ImGuiSliderFlags flags);
     void* GetTextureByID(int id);
 }

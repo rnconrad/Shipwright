@@ -1,7 +1,9 @@
 #include "SohImGuiImpl.h"
 
 #include <iostream>
+#include <iomanip>
 #include <utility>
+#include <regex>
 
 #include "Archive.h"
 #include "Environment.h"
@@ -38,6 +40,9 @@ using namespace Ship;
 bool oldCursorState = true;
 
 #define TOGGLE_BTN ImGuiKey_F1
+#define TTS_TOGGLE_BTN ImGuiKey_F2
+#define FOCUS_MENU_BTN ImGuiKey_F3
+#define FOCUS_CONSOLE_BTN ImGuiKey_F4
 #define HOOK(b) if(b) needs_save = true;
 OSContPad* pads;
 
@@ -50,6 +55,11 @@ namespace SohImGui {
     Console* console = new Console;
     bool p_open = false;
     bool needs_save = false;
+    bool is_hovering = false;
+    ImGuiID last_hovered_id;
+    ImGuiID first_id, last_id;
+    std::map<ImGuiID, std::string> tts_map = {};
+    std::regex num_reg("([0-9]+ %)");
 
     void ImGuiWMInit() {
         switch (impl.backend) {
@@ -133,6 +143,11 @@ namespace SohImGui {
         return false;
     }
 
+    void SohImGui::ReadText(std::string text, bool force = false) {
+        if (Game::Settings.accessibility.enable_tts || force)
+            GlobalCtx2::GetInstance()->GetWindow()->ReadText(text.c_str());
+    }
+
     void SohImGui::ShowCursor(bool hide, Dialogues d) {
         if (d == Dialogues::dLoadSettings) {
             GlobalCtx2::GetInstance()->GetWindow()->ShowCursor(hide);
@@ -151,6 +166,37 @@ namespace SohImGui {
             oldCursorState = hide;
             GlobalCtx2::GetInstance()->GetWindow()->ShowCursor(hide);
         }
+    }
+
+    // first_or_last_item is 0 for first, 1 for last, -1 for all others
+    bool SohImGui::BeginMenu(const char *label, bool enabled = true, int first_or_last_item = -1) {
+        ImGuiID id = ImGui::GetID(label);
+        switch (first_or_last_item) {
+        case 0:
+            first_id = id;
+            break;
+        case 1:
+            last_id = id;
+            break;
+        }
+        tts_map[id] = label;
+        return ImGui::BeginMenu(label, enabled);
+    }
+
+    bool SohImGui::Checkbox(const char *label, bool* v) {
+        tts_map[ImGui::GetID(label)] = StringHelper::Sprintf("%s, %s", label, (*v ? "enabled" : "disabled"));
+        return ImGui::Checkbox(label, v);
+    }
+
+    bool SohImGui::MenuItem(const char* label, const char* shortcut, bool* p_selected, bool enabled = true) {
+        tts_map[ImGui::GetID(label)] = label;
+        return ImGui::MenuItem(label, shortcut, p_selected, enabled);
+    }
+
+    bool SohImGui::SliderFloat(const char* label, const char* str_id, float* v, float v_min, float v_max, const char* format, ImGuiSliderFlags flags = 0) {
+        tts_map[ImGui::GetID(str_id)] = label;
+        ImGui::Text(label);
+        return ImGui::SliderFloat(str_id, v, v_min, v_max, format, flags);
     }
 
     void LoadTexture(std::string name, std::string path) {
@@ -179,7 +225,7 @@ namespace SohImGui {
         ImGuiContext* ctx = ImGui::CreateContext();
         ImGui::SetCurrentContext(ctx);
         io = &ImGui::GetIO();
-        io->ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+        io->ConfigFlags |= ImGuiConfigFlags_DockingEnable | ImGuiConfigFlags_NavEnableKeyboard;
         if (UseViewports()) {
             io->ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
         }
@@ -219,10 +265,24 @@ namespace SohImGui {
         ImGuiProcessEvent(event);
     }
 
+    void FocusConsole() {
+        // Focusing the CMDInput control should just work but it doesn't... so we gotta hack it a bit.
+        // Focus Console window and fake a x2 Tab input
+        ImGui::FocusWindow(ImGui::FindWindowByName("Console"));
+        io->AddKeyEvent(ImGuiKey_Tab, true);
+        io->AddKeyEvent(ImGuiKey_Tab, false);
+        io->AddKeyEvent(ImGuiKey_Tab, true);
+        io->AddKeyEvent(ImGuiKey_Tab, false);
+        ReadText("Console focused");
+    }
+
 #define BindButton(btn, status) ImGui::Image(impl.backend == Backend::DX11 ? GetTextureByID(DefaultAssets[btn]->textureId) : (ImTextureID)(DefaultAssets[btn]->textureId), ImVec2(16.0f * scale, 16.0f * scale), ImVec2(0, 0), ImVec2(1.0f, 1.0f), ImVec4(255, 255, 255, (status) ? 255 : 0));
 
     void BindAudioSlider(const char* name, const char* key, float* value, SeqPlayers playerId) {
-        ImGui::Text(name, static_cast<int>(100 * *(value)));
+        int v = static_cast<int>(100 * *(value));
+        std::string label = StringHelper::Sprintf(name, v);
+        tts_map[ImGui::GetID((std::string("##") + key).c_str())] = label;
+        ImGui::Text(label.c_str());
         if (ImGui::SliderFloat((std::string("##") + key).c_str(), value, 0.0f, 1.0f, "")) {
             const float volume = floorf(*(value) * 100) / 100;
             CVar_SetFloat(const_cast<char*>(key), volume);
@@ -231,12 +291,14 @@ namespace SohImGui {
         }
     }
 
-    void Draw() {
+    extern "C" uint8_t __enableGameInput;
 
+    void Draw() {
         console->Update();
         ImGuiBackendNewFrame();
         ImGuiWMNewFrame();
         ImGui::NewFrame();
+        __enableGameInput = true;
 
         const std::shared_ptr<Window> wnd = GlobalCtx2::GetInstance()->GetWindow();
         ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoDocking |
@@ -273,6 +335,106 @@ namespace SohImGui {
             needs_save = true;
             GlobalCtx2::GetInstance()->GetWindow()->dwMenubar = Game::Settings.debug.menu_bar;
             ShowCursor(Game::Settings.debug.menu_bar, Dialogues::dMenubar);
+            ReadText(StringHelper::Sprintf("Debug Menu %s", (Game::Settings.debug.menu_bar ? "enabled" : "disabled")));
+        }
+
+        if (ImGui::IsKeyPressed(TTS_TOGGLE_BTN)) {
+            Game::Settings.accessibility.enable_tts = !Game::Settings.accessibility.enable_tts;
+            needs_save = true;
+            ReadText(StringHelper::Sprintf("Text-To-Speech %s", (Game::Settings.accessibility.enable_tts ? "enabled" : "disabled")), true);
+        }
+
+        // Keyboard Navigation for Accessibility
+        if (Game::Settings.debug.menu_bar) {
+            if (ImGui::IsKeyPressed(FOCUS_MENU_BTN)) {
+                ImGuiContext* current_ctx = ImGui::GetCurrentContext();
+                current_ctx->NavDisableHighlight = false;
+
+                if (ImGui::IsAnyItemFocused()) {
+                    ImGuiID focused = ImGui::GetFocusID();
+
+                    if (console->opened) {
+                        // Get an ID for our Console's input box
+                        std::string cmd_input = "CMDInput";
+                        ImGuiWindow* console_window = ImGui::FindWindowByName("Console");
+                        ImGuiID cmd_input_id = ImGui::GetIDWithSeed(cmd_input.c_str(), cmd_input.c_str() + cmd_input.size(), console_window->ID);
+
+                        if (focused == cmd_input_id) {
+                            ImGui::FocusWindow(NULL);
+                            ReadText("Game focused");
+                        }
+                        else {
+                            FocusConsole();
+                        }
+                    }
+                    else {
+                        ImGui::FocusWindow(NULL);
+                        ReadText("Game focused");
+                    }
+                }
+                else {
+                    // Dirty... Fake an input to our first menu item
+                    io->AddKeyEvent(ImGuiKey_Escape, true);
+                    io->AddKeyEvent(ImGuiKey_Escape, false);
+                    ImGui::SetFocusID(first_id, current_ctx->CurrentWindow);
+                    ImGui::SetHoveredID(first_id);
+                    io->AddKeyEvent(ImGuiKey_LeftArrow, true);
+                    io->AddKeyEvent(ImGuiKey_LeftArrow, false);
+                    ReadText("Menu focused");
+                }
+            }
+
+            if (ImGui::IsKeyReleased(ImGuiKey_LeftArrow) || ImGui::IsKeyReleased(ImGuiKey_RightArrow)
+                || ImGui::IsKeyReleased(ImGuiKey_DownArrow) || ImGui::IsKeyReleased(ImGuiKey_UpArrow)) {
+                if (ImGui::IsAnyItemFocused()) {
+                    ImGuiID focused = ImGui::GetFocusID();
+                    
+
+                    if (ImGui::IsAnyItemActive()) {
+                        // We are focused inside a slider in edit mode, just read back the value please
+                        std::cmatch slider_val;
+                        regex_search(tts_map[focused].c_str(), slider_val, num_reg);
+                        ReadText(slider_val.str());
+                    }
+                    else {
+                        ReadText(tts_map[focused]);
+                    }
+                }
+            }
+
+            if (ImGui::IsKeyReleased(ImGuiKey_Space)) {
+                if (ImGui::IsAnyItemActive()) {
+                    std::string cmd_input = "CMDInput";
+                    ImGuiWindow* console_window = ImGui::FindWindowByName("Console");
+                    ImGuiID cmd_input_id = ImGui::GetIDWithSeed(cmd_input.c_str(), cmd_input.c_str() + cmd_input.size(), console_window->ID);
+                    ImGuiID active = ImGui::GetActiveID();
+                    if (active != cmd_input_id) {
+                        if (ImGui::IsAnyItemFocused()) {
+                            ReadText(StringHelper::Sprintf("selected %s", tts_map[active].c_str()));
+                        }
+                        else
+                            ReadText(StringHelper::Sprintf("deselected %s", tts_map[active].c_str()));
+                    }
+                }
+            }
+
+            if (ImGui::IsAnyItemHovered()) {
+                ImGuiID hovered = ImGui::GetHoveredID();
+                if (tts_map.count(hovered) > 0 &&
+                    (!is_hovering || hovered != last_hovered_id)) {
+                    ReadText(tts_map[hovered]);
+                    is_hovering = true;
+                    last_hovered_id = hovered;
+                }
+            }
+            else {
+                is_hovering = false;
+            }
+            ///////////
+        }
+
+        if (ImGui::IsKeyReleased(FOCUS_CONSOLE_BTN) && console->opened) {
+            FocusConsole();
         }
 
         if (ImGui::BeginMenuBar()) {
@@ -285,10 +447,20 @@ namespace SohImGui {
             ImGui::Text("Shipwright");
             ImGui::Separator();
 
-            if (ImGui::BeginMenu("Audio")) {
+            if (SohImGui::BeginMenu("Accessibility", true, 0)) {
+                if (SohImGui::Checkbox("Text-To-Speech", &Game::Settings.accessibility.enable_tts)) {
+                    CVar_SetS32(const_cast<char*>("gMessageTTS"), Game::Settings.accessibility.enable_tts);
+                    ReadText(StringHelper::Sprintf("Text-To-Speech %s", (Game::Settings.accessibility.enable_tts ? "enabled" : "disabled")), true);
+                    needs_save = true;
+                }
+
+                ImGui::EndMenu();
+            }
+
+            if (SohImGui::BeginMenu("Audio")) {
+                ImGui::SetItemDefaultFocus();
                 const float volume = Game::Settings.audio.master;
-                ImGui::Text("Master Volume: %d %%", static_cast<int>(100 * volume));
-                if (ImGui::SliderFloat("##Master_Vol", &Game::Settings.audio.master, 0.0f, 1.0f, "")) {
+                if (SohImGui::SliderFloat(StringHelper::Sprintf("Master Volume: %d %%", static_cast<int>(100 * volume)).c_str(), "##Master_Vol", &Game::Settings.audio.master, 0.0f, 1.0f, "")) {
                     CVar_SetFloat(const_cast<char*>("gGameMasterVolume"), volume);
                     needs_save = true;
                 }
@@ -301,34 +473,31 @@ namespace SohImGui {
                 ImGui::EndMenu();
             }
 
-            if (ImGui::BeginMenu("Controller")) {
-                ImGui::Text("Gyro Sensitivity: %d %%", static_cast<int>(100 * Game::Settings.controller.gyro_sensitivity));
-                if (ImGui::SliderFloat("##GYROSCOPE", &Game::Settings.controller.gyro_sensitivity, 0.0f, 1.0f, "")) {
-                    needs_save = true;
-                }
-                ImGui::Text("Rumble Strength: %d %%", static_cast<int>(100 * Game::Settings.controller.rumble_strength));
-                if (ImGui::SliderFloat("##RUMBLE", &Game::Settings.controller.rumble_strength, 0.0f, 1.0f, "")) {
+            if (SohImGui::BeginMenu("Controller")) {
+                if (SohImGui::SliderFloat(StringHelper::Sprintf("Gyro Sensitivity: %d %%", static_cast<int>(100 * Game::Settings.controller.gyro_sensitivity)).c_str(), "##GYROSCOPE", &Game::Settings.controller.gyro_sensitivity, 0.0f, 1.0f, "")) {
                     needs_save = true;
                 }
 
-                if (ImGui::Checkbox("Show Inputs", &Game::Settings.controller.input_enabled)) {
+                if (SohImGui::SliderFloat(StringHelper::Sprintf("Rumble Strength: %d %%", static_cast<int>(100 * Game::Settings.controller.rumble_strength)).c_str(), "##RUMBLE", &Game::Settings.controller.rumble_strength, 0.0f, 1.0f, "")) {
                     needs_save = true;
                 }
 
-                ImGui::Text("Input Scale: %.1f", Game::Settings.controller.input_scale);
-                if (ImGui::SliderFloat("##Input", &Game::Settings.controller.input_scale, 1.0f, 3.0f, "")) {
+                if (SohImGui::Checkbox("Show Inputs", &Game::Settings.controller.input_enabled)) {
+                    needs_save = true;
+                }
+
+                if (SohImGui::SliderFloat(StringHelper::Sprintf("Input Scale: %.1f", Game::Settings.controller.input_scale).c_str(), "##Input", &Game::Settings.controller.input_scale, 1.0f, 3.0f, "")) {
                     needs_save = true;
                 }
 
                 ImGui::EndMenu();
             }
 
-            if (ImGui::BeginMenu("Enhancements")) {
-
+            if (SohImGui::BeginMenu("Enhancements")) {
                 ImGui::Text("Gameplay");
                 ImGui::Separator();
 
-                if (ImGui::Checkbox("Fast Text", &Game::Settings.enhancements.fast_text)) {
+                if (SohImGui::Checkbox("Fast Text", &Game::Settings.enhancements.fast_text)) {
                     CVar_SetS32(const_cast<char*>("gFastText"), Game::Settings.enhancements.fast_text);
                     needs_save = true;
                 }
@@ -337,15 +506,15 @@ namespace SohImGui {
                 ImGui::Separator();
 
                 if (UseInternalRes()) {
-                    HOOK(ImGui::Checkbox("N64 Mode", &Game::Settings.debug.n64mode));
+                    HOOK(SohImGui::Checkbox("N64 Mode", &Game::Settings.debug.n64mode));
                 }
 
-                if (ImGui::Checkbox("Animated Link in Pause Menu", &Game::Settings.enhancements.animated_pause_menu)) {
+                if (SohImGui::Checkbox("Animated Link in Pause Menu", &Game::Settings.enhancements.animated_pause_menu)) {
                     CVar_SetS32(const_cast<char*>("gPauseLiveLink"), Game::Settings.enhancements.animated_pause_menu);
                     needs_save = true;
                 }
 
-                if (ImGui::Checkbox("Disable LOD", &Game::Settings.enhancements.disable_lod)) {
+                if (SohImGui::Checkbox("Disable LOD", &Game::Settings.enhancements.disable_lod)) {
                     CVar_SetS32(const_cast<char*>("gDisableLOD"), Game::Settings.enhancements.disable_lod);
                     needs_save = true;
                 }
@@ -353,7 +522,7 @@ namespace SohImGui {
                 ImGui::Text("Debugging");
                 ImGui::Separator();
 
-                if (ImGui::Checkbox("Debug Mode", &Game::Settings.enhancements.debug_mode)) {
+                if (SohImGui::Checkbox("Debug Mode", &Game::Settings.enhancements.debug_mode)) {
                     CVar_SetS32(const_cast<char*>("gDebugEnabled"), Game::Settings.enhancements.debug_mode);
                     needs_save = true;
                 }
@@ -361,9 +530,9 @@ namespace SohImGui {
                 ImGui::EndMenu();
             }
 
-            if (ImGui::BeginMenu("Developer Tools")) {
-                HOOK(ImGui::MenuItem("Stats", nullptr, &Game::Settings.debug.soh));
-                HOOK(ImGui::MenuItem("Console", nullptr, &console->opened));
+            if (SohImGui::BeginMenu("Developer Tools", true, 1)) {
+                HOOK(SohImGui::MenuItem("Stats", nullptr, &Game::Settings.debug.soh));
+                HOOK(SohImGui::MenuItem("Console", nullptr, &console->opened));
                 ImGui::EndMenu();
             }
 
@@ -468,6 +637,10 @@ namespace SohImGui {
         }
 
         console->Draw();
+
+        if (ImGui::IsAnyItemFocused()) {
+            __enableGameInput = false;
+        }
 
         ImGui::Render();
         ImGuiRenderDrawData(ImGui::GetDrawData());
