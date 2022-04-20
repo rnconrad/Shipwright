@@ -1063,6 +1063,98 @@ void Gameplay_DrawOverlayElements(GlobalContext* globalCtx) {
     }
 }
 
+extern int fbSceneInfo;
+
+void Gameplay_Draw_SceneInfo(GlobalContext* globalCtx) {
+    GraphicsContext* originalGfxCtx = globalCtx->state.gfxCtx;
+    GraphicsContext sceneInfoGfxCtx = *originalGfxCtx; 
+    GraphicsContext* gfxCtx = &sceneInfoGfxCtx;
+
+    if (globalCtx->pauseCtx.state != 0) {
+        return;
+    }
+
+    OPEN_DISPS(gfxCtx, "../z_play.c", 3907);
+
+    Graph_InitTHGAPoolIndex(gfxCtx, 2);
+    globalCtx->state.gfxCtx = gfxCtx;
+    gfxCtx->unk_014 = 1;
+
+
+    gSegments[4] = VIRTUAL_TO_PHYSICAL(globalCtx->objectCtx.status[globalCtx->objectCtx.mainKeepIndex].segment);
+    gSegments[5] = VIRTUAL_TO_PHYSICAL(globalCtx->objectCtx.status[globalCtx->objectCtx.subKeepIndex].segment);
+    gSegments[2] = VIRTUAL_TO_PHYSICAL(globalCtx->sceneSegment);
+
+    gSPSegment(POLY_OPA_DISP++, 0x00, NULL);
+    gSPSegment(POLY_XLU_DISP++, 0x00, NULL);
+    gSPSegment(OVERLAY_DISP++, 0x00, NULL);
+
+    gSPSegment(POLY_OPA_DISP++, 0x04, globalCtx->objectCtx.status[globalCtx->objectCtx.mainKeepIndex].segment);
+    gSPSegment(POLY_XLU_DISP++, 0x04, globalCtx->objectCtx.status[globalCtx->objectCtx.mainKeepIndex].segment);
+    gSPSegment(OVERLAY_DISP++, 0x04, globalCtx->objectCtx.status[globalCtx->objectCtx.mainKeepIndex].segment);
+
+    gSPSegment(POLY_OPA_DISP++, 0x05, globalCtx->objectCtx.status[globalCtx->objectCtx.subKeepIndex].segment);
+    gSPSegment(POLY_XLU_DISP++, 0x05, globalCtx->objectCtx.status[globalCtx->objectCtx.subKeepIndex].segment);
+    gSPSegment(OVERLAY_DISP++, 0x05, globalCtx->objectCtx.status[globalCtx->objectCtx.subKeepIndex].segment);
+
+    gSPSegment(POLY_OPA_DISP++, 0x02, globalCtx->sceneSegment);
+    gSPSegment(POLY_XLU_DISP++, 0x02, globalCtx->sceneSegment);
+    gSPSegment(OVERLAY_DISP++, 0x02, globalCtx->sceneSegment);
+
+    func_80095248(gfxCtx, 0, 0, 0);
+
+    if ((HREG(80) != 10) || (HREG(82) != 0)) {
+        if (gTrnsnUnkState != 3) {
+            PreRender_SetValues(&globalCtx->pauseBgPreRender, SCREEN_WIDTH, SCREEN_HEIGHT, gfxCtx->curFrameBuffer,
+                                gZBuffer);
+            {
+                s32 sp80;
+
+                gDPSetOverrideColor(POLY_OPA_DISP++, 0, 0, 0, 0, 0, 255);
+                gDPSetOverrideColor(POLY_XLU_DISP++, 0, 0, 0, 0, 0, 255);
+
+                if ((HREG(80) != 10) || (HREG(84) != 0)) {
+                    if (VREG(94) == 0) {
+                        if (HREG(80) != 10) {
+                            sp80 = 3;
+                        } else {
+                            sp80 = HREG(84);
+                        }
+                        Scene_Draw(globalCtx);
+                        Room_Draw(globalCtx, &globalCtx->roomCtx.curRoom, sp80 & 3);
+                        Room_Draw(globalCtx, &globalCtx->roomCtx.prevRoom, sp80 & 3);
+                    }
+                }
+
+                gDPSetOverrideColor(POLY_OPA_DISP++, 0, 0, 0, 0, 0, 0);
+                gDPSetOverrideColor(POLY_XLU_DISP++, 0, 0, 0, 0, 0, 0);
+
+                if ((HREG(80) != 10) || (HREG(85) != 0)) {
+                    func_800315AC(globalCtx, &globalCtx->actorCtx);
+                }
+            }
+        }
+    }
+
+    gSPBranchList(POLY_OPA_DISP++, gfxCtx->polyXluBuffer);
+    gSPEndDisplayList(POLY_XLU_DISP++);
+    //gSPBranchList(POLY_XLU_DISP++, gfxCtx->polyKalBuffer);
+    //gSPEndDisplayList(POLY_KAL_DISP++);
+
+    CLOSE_DISPS(gfxCtx, "../z_play.c", 4508);
+
+    globalCtx->state.gfxCtx = originalGfxCtx;
+
+    OPEN_DISPS(originalGfxCtx, "../z_play.c", 1111);
+
+    gsSPSetFB(POLY_XLU_DISP++, fbSceneInfo);
+    gSPDisplayList(POLY_XLU_DISP++, gfxCtx->polyOpaBuffer);
+    gsSPResetFB(POLY_XLU_DISP++);
+    //gSPDisplayList(POLY_XLU_DISP++, gfxCtx->polyOpaBuffer);
+
+    CLOSE_DISPS(originalGfxCtx, "../z_play.c", 1484);
+}
+
 void Gameplay_Draw(GlobalContext* globalCtx) {
     GraphicsContext* gfxCtx = globalCtx->state.gfxCtx;
     Lights* sp228;
@@ -1383,6 +1475,10 @@ void Gameplay_Main(GameState* thisx) {
     }
 
     Gameplay_Draw(globalCtx);
+
+    if (CVar_GetS32("gBlind_ObjectCue", 0)) {
+        Gameplay_Draw_SceneInfo(globalCtx);
+    }
 
     if (1 && HREG(63)) {
         LOG_NUM("1", 1, "../z_play.c", 4587);

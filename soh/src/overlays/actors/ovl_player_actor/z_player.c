@@ -10746,6 +10746,10 @@ void Player_UpdateCommon(Player* this, GlobalContext* globalCtx, Input* input) {
     if (CVar_GetS32("gAimAudioCues", 0)) {
         Player_UpdateAimCue(this, globalCtx);
     }
+
+    if (CVar_GetS32("gBlind_ObjectCue", 0)) {
+        Player_UpdateVisionCue(this, globalCtx, input);
+    }
 }
 
 static Vec3f D_80854838 = { 0.0f, 0.0f, -30.0f };
@@ -11071,6 +11075,9 @@ s16 func_8084ABD8(GlobalContext* globalCtx, Player* this, s32 arg2, s16 arg3) {
 
             Audio_PlaySoundGeneral(NA_SE_OC_REVENGE, &sRelativeNorthPos, 4, &sLookNoisePitch, &D_801333E0, &D_801333E8);
         }
+
+        //immediately rotate the actor to face the same direction
+        this->actor.shape.rot.y = this->actor.focus.rot.y;
     }
     else {
         temp1 = (this->stateFlags1 & PLAYER_STATE1_23) ? 3500 : 14000;

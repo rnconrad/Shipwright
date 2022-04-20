@@ -980,6 +980,57 @@ std::map<std::pair<float, float>, uint16_t> gfx_d3d11_get_pixel_depth(int fb_id,
     return res;
 }
 
+void gfx_d3d11_read_pixels(int fb, uint32_t x, uint32_t y, uint32_t width, uint32_t height, uint32_t type, void* data) {
+
+    ComPtr<ID3D11Texture2D> texture, fb_texture;
+
+    fb_texture = d3d.textures[d3d.framebuffers[fb].texture_id].texture;
+
+    D3D11_TEXTURE2D_DESC fb_texture_desc, texture_desc;
+    fb_texture.Get()->GetDesc(&fb_texture_desc);
+
+    if (x >= fb_texture_desc.Width || width == 0 ||
+       y >= fb_texture_desc.Height || height == 0) {
+       return;
+    }
+
+    if (width + x > fb_texture_desc.Width ||
+        height + y > fb_texture_desc.Height) { //asdf
+       return;
+    }
+
+    texture_desc.Width = fb_texture_desc.Width;
+    texture_desc.Height = fb_texture_desc.Height;
+    texture_desc.Usage = D3D11_USAGE_STAGING;
+    texture_desc.BindFlags = 0;
+    texture_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    texture_desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+    texture_desc.MiscFlags = 0;
+    texture_desc.ArraySize = 1;
+    texture_desc.MipLevels = 1;
+    texture_desc.SampleDesc.Count = 1;
+    texture_desc.SampleDesc.Quality = 0;
+
+    ThrowIfFailed(d3d.device->CreateTexture2D(&texture_desc, nullptr, texture.GetAddressOf()));
+
+    d3d.context->CopyResource(texture.Get(), fb_texture.Get());
+
+    D3D11_MAPPED_SUBRESOURCE mapping_desc;
+    ThrowIfFailed(d3d.context->Map(texture.Get(), 0, D3D11_MAP_READ, 0, &mapping_desc));
+    if (mapping_desc.pData != nullptr) {
+        u8* src = (u8*)mapping_desc.pData + x + y * mapping_desc.RowPitch;
+        u8* dst = (u8*)data;
+        for (int i = 0; i < height; i++) {
+            memcpy(dst, src, width * 4);
+            dst += width * 4;
+            src += mapping_desc.RowPitch;
+        }
+    }
+    d3d.context->Unmap(texture.Get(), 0);
+
+    texture.ReleaseAndGetAddressOf();
+}
+
 } // namespace
 
 ImTextureID SohImGui::GetTextureByID(int id) {
@@ -998,6 +1049,7 @@ struct GfxRenderingAPI gfx_direct3d11_api = {
     gfx_d3d11_upload_texture,
     gfx_d3d11_set_sampler_parameters,
     gfx_d3d11_set_depth_test_and_mask,
+    gfx_d3d11_read_pixels,
     gfx_d3d11_set_zmode_decal,
     gfx_d3d11_set_viewport,
     gfx_d3d11_set_scissor,

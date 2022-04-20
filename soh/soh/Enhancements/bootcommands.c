@@ -33,7 +33,7 @@ void BootCommands_Init()
     CVar_RegisterS32("gBlind_MoreTargets", 0);
     CVar_RegisterS32("gBlind_AimAudioCues", 0);
     CVar_RegisterS32("gBlind_NoCameraTurn", 0);
-    CVar_RegisterS32("gBlind_Vision", 0);
+    CVar_RegisterS32("gBlind_ObjectCue", 0);
 }
 
 //void BootCommands_ParseBootArgs(char* str)
