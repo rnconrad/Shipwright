@@ -25,7 +25,8 @@ void BootCommands_Init()
     CVar_RegisterS32("gDisableLOD", 0);
     CVar_RegisterS32("gDebugEnabled", 0);
     CVar_RegisterS32("gPauseLiveLink", 0);
-
+    CVar_RegisterS32("gMinimalUI", 0);
+	
     // Blind Mode Variables
     CVar_RegisterS32("gBlind_DPadLook", 0);
     CVar_RegisterS32("gBlind_AccessibleInteraction", 0);
