@@ -23,15 +23,40 @@ struct SoHConfigType {
         bool fast_text = false;
         bool disable_lod = false;
         bool animated_pause_menu = false;
-        bool debug_mode = false;
+        bool minimal_ui = false;
+        bool mm_bunny_hood = false;
     } enhancements;
 
+    // Controller
     struct {
         float gyro_sensitivity = 1.0f;
         float rumble_strength = 1.0f;
         float input_scale = 1.0f;
-        bool  input_enabled = false;
+        float gyroDriftX = 0.0f;
+        float gyroDriftY = 0.0f;
+        bool input_enabled = false;
+        bool dpad_pause_name = false;
+        bool dpad_ocarina_text = false;
+        bool dpad_shop = false;
     } controller;
+
+    // Cheats
+    struct {
+        bool debug_mode = false;
+        bool infinite_money = false;
+        bool infinite_health = false;
+        bool infinite_ammo = false;
+        bool infinite_magic = false;
+        bool no_clip = false;
+        bool climb_everything = false;
+        bool moon_jump_on_l = false;
+        bool super_tunic = false;
+    } cheats;
+
+    // Graphics
+    struct {
+        bool show = false;
+    } graphics;
 
     // Accessibility
     struct {
@@ -51,6 +76,7 @@ enum SeqPlayers {
 #define AUDIO_SECTION "AUDIO SETTINGS"
 #define CONTROLLER_SECTION "CONTROLLER SECTION"
 #define ENHANCEMENTS_SECTION "ENHANCEMENT SETTINGS"
+#define CHEATS_SECTION "CHEATS SETTINGS"
 #define ACCESSIBILITY_SECTION "ACCESSIBILITY SECTION"
 
 namespace Game {
