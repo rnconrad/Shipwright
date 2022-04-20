@@ -3952,6 +3952,58 @@ void Interface_Draw(GlobalContext* globalCtx) {
     CLOSE_DISPS(globalCtx->state.gfxCtx, "../z_parameter.c", 4269);
 }
 
+void Interface_TTS_Update(GlobalContext* globalCtx) {
+    static u32 sPrevTimer = 0;
+    static u8 sTtsAnnounceBuf[32];
+
+    u32 timer = 0;
+    if (gSaveContext.timer1State != 0) {
+        timer = gSaveContext.timer1Value;
+    } else if (gSaveContext.timer2State != 0) {
+        timer = gSaveContext.timer2Value;
+    }
+
+    if (timer > 0) {
+        if (timer > sPrevTimer || (timer % 30 == 0 && sPrevTimer != timer)) {
+            u32 minutes = timer / 60;
+            u32 seconds = timer % 60;
+            u8* announceBuf = sTtsAnnounceBuf;
+            u8 arg[8]; // at least big enough where no s8 string will overflow
+            if (minutes > 0) {
+                sprintf(arg, "%d", minutes);
+                announceBuf += sprintf(announceBuf, "%s ", OTRMessage_GetAccessibilityText("text/accessibility_text/accessibility_text_eng",
+                    0x800 + ((minutes > 1) ? 4 : 3), arg));
+            }
+            if (seconds > 0) {
+                sprintf(arg, "%d", seconds);
+                announceBuf += sprintf(announceBuf, "%s", OTRMessage_GetAccessibilityText("text/accessibility_text/accessibility_text_eng",
+                    0x800 + ((seconds > 1) ? 6 : 5), arg));
+            }
+            ASSERT(announceBuf < sTtsAnnounceBuf + sizeof(sTtsAnnounceBuf), "Text buffer exceeded", __FILE__, __LINE__);
+            OTRTextToSpeechCallback(sTtsAnnounceBuf);
+            sPrevTimer = timer;
+        }
+    }
+
+    sPrevTimer = timer;
+
+    static s16 sLostHealth = 0;
+    static s16 sPrevHealth = 0;
+
+    if (gSaveContext.health - sPrevHealth < 0) {
+        sLostHealth += sPrevHealth - gSaveContext.health;
+    }
+
+    if (globalCtx->state.frames % 7 == 0) {
+        if (sLostHealth >= 16) {
+            Audio_PlaySoundGeneral(NA_SE_SY_CANCEL, &D_801333D4, 4, &D_801333E0, &D_801333E0, &D_801333E8);
+            sLostHealth -= 16;
+        }
+    }
+
+    sPrevHealth = gSaveContext.health;
+}
+
 void Interface_Update(GlobalContext* globalCtx) {
     static u8 D_80125B60 = 0;
     static s16 sPrevTimeIncrement = 0;
@@ -3962,6 +4014,10 @@ void Interface_Update(GlobalContext* globalCtx) {
     s16 alpha1;
     u16 action;
     Input* debugInput = &globalCtx->state.input[2];
+
+    if (CVar_GetS32("gBlind_MessageTTS", 0) != 0) {
+        Interface_TTS_Update(globalCtx);
+    }
 
     if (CHECK_BTN_ALL(debugInput->press.button, BTN_DLEFT)) {
         gSaveContext.language = LANGUAGE_ENG;
