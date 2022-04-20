@@ -21,13 +21,17 @@ static BootCommand sCommands[] = { { "--skiplogo", BootCommands_Command_SkipLogo
 
 void BootCommands_Init() 
 {
+    // SoH Enhancement Variables
     CVar_RegisterS32("gDisableLOD", 0);
     CVar_RegisterS32("gDebugEnabled", 0);
     CVar_RegisterS32("gPauseLiveLink", 0);
-    CVar_RegisterS32("gDPadLook", 0);
-    CVar_RegisterS32("gAccessibleInteraction", 0);
-    CVar_RegisterS32("gMoreTargets", 0);
-    CVar_RegisterS32("gAimAudioCues", 0);
+
+    // Blind Mode Variables
+    CVar_RegisterS32("gBlind_DPadLook", 0);
+    CVar_RegisterS32("gBlind_AccessibleInteraction", 0);
+    CVar_RegisterS32("gBlind_MoreTargets", 0);
+    CVar_RegisterS32("gBlind_AimAudioCues", 0);
+    CVar_RegisterS32("gBlind_NoCameraTurn", 0);
 }
 
 //void BootCommands_ParseBootArgs(char* str)
