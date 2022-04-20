@@ -9364,9 +9364,7 @@ void Player_InitCommon(Player* this, GlobalContext* globalCtx, FlexSkeletonHeade
     Collider_InitQuad(globalCtx, &this->shieldQuad);
     Collider_SetQuad(globalCtx, &this->shieldQuad, &this->actor, &D_808546A0);
 
-    if (CVar_GetS32("gAimAudioCues", 0)) {
-        Player_InitAimCueCollision(this, globalCtx);
-    }
+    Player_InitAimCueCollision(this, globalCtx);
 }
 
 static void (*D_80854738[])(GlobalContext* globalCtx, Player* this) = {
@@ -10730,6 +10728,10 @@ void Player_UpdateCommon(Player* this, GlobalContext* globalCtx, Input* input) {
 
     if (CVar_GetS32("gAimAudioCues", 0)) {
         Player_UpdateAimCue(this, globalCtx);
+    }
+
+    if (CVar_GetS32("gSpatialAudioCues", 0)) {
+        Player_UpdateSpatialCues(this, globalCtx);
     }
 }
 

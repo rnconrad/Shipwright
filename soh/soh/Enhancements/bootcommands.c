@@ -28,6 +28,7 @@ void BootCommands_Init()
     CVar_RegisterS32("gAccessibleInteraction", 0);
     CVar_RegisterS32("gMoreTargets", 0);
     CVar_RegisterS32("gAimAudioCues", 0);
+    CVar_RegisterS32("gSpatialAudioCues", 0);
 }
 
 //void BootCommands_ParseBootArgs(char* str)
