@@ -421,7 +421,7 @@ void EnBox_WaitOpen(EnBox* this, GlobalContext* globalCtx) {
         Flags_SetTreasure(globalCtx, this->dyna.actor.params & 0x1F);
     } else {
         bool isPlayerInFrontOfActor;
-        if (CVar_GetS32("gAccessibleInteraction", 0)) {
+        if (CVar_GetS32("gBlind_AccessibleInteraction", 0)) {
             isPlayerInFrontOfActor = true;
         } else {
             player = GET_PLAYER(globalCtx);

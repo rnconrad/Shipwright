@@ -1750,7 +1750,7 @@ u32 func_8002F090(Actor* actor, f32 arg1) {
 }
 
 s32 Actor_IsTargetable(Actor* actor, Player* player) {
-    s32 targetMode = CVar_GetS32("gMoreTargets", 0);
+    s32 targetMode = CVar_GetS32("gBlind_MoreTargets", 0);
 
     if ((actor->update == NULL) || ((Player*)actor == player)) {
         return false;
