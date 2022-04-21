@@ -791,6 +791,11 @@ static std::map<std::pair<float, float>, uint16_t> gfx_opengl_get_pixel_depth(in
     return res;
 }
 
+void gfx_opengl_read_pixels(int fb, uint32_t x, uint32_t y, uint32_t width, uint32_t height, uint32_t type, void* data) {
+    return;
+}
+
+
 struct GfxRenderingAPI gfx_opengl_api = {
     gfx_opengl_get_clip_parameters,
     gfx_opengl_unload_shader,
@@ -803,6 +808,7 @@ struct GfxRenderingAPI gfx_opengl_api = {
     gfx_opengl_upload_texture,
     gfx_opengl_set_sampler_parameters,
     gfx_opengl_set_depth_test_and_mask,
+    gfx_opengl_read_pixels,
     gfx_opengl_set_zmode_decal,
     gfx_opengl_set_viewport,
     gfx_opengl_set_scissor,
