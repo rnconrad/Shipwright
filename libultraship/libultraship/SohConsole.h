@@ -77,5 +77,6 @@ public:
 	void Draw();
 	void Append(const std::string& channel, Priority priority, const char* fmt, ...);
 	void Dispatch(const std::string& line);
+	void ReadText(std::string text, bool force);
 	static int CallbackStub(ImGuiInputTextCallbackData* data);
 };

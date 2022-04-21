@@ -15,9 +15,12 @@ std::map<ImGuiKey, std::string> BindingToggle;
 
 static bool HelpCommand(const std::vector<std::string>&) {
 	INFO("SoH Commands:");
+	std::string tts_output;
 	for(const auto& cmd : SohImGui::console->Commands) {
 		INFO((" - " + cmd.first).c_str());
+		tts_output += cmd.first + ", ";
 	}
+	SohImGui::ReadText("Commands: " + tts_output, false);
 	return CMD_SUCCESS;
 }
 
@@ -72,6 +75,14 @@ std::string BuildUsage(const CommandEntry& entry) {
 	std::string usage;
 	for (const auto& arg : entry.arguments)
 		usage += StringHelper::Sprintf(arg.optional ? "[%s] " : "<%s> ", arg.info.c_str());
+	return usage;
+}
+
+std::string BuildTTSFriendlyUsage(const CommandEntry& entry) {
+	std::string usage;
+	for (int i = 0; i < entry.arguments.size(); ++i) {
+		usage += StringHelper::Sprintf(", Argument %d %s %s", i, (entry.arguments[i].optional ? "(Optional), " : ", "), entry.arguments[i].info.c_str());
+	}
 	return usage;
 }
 
@@ -261,11 +272,14 @@ void Console::Dispatch(const std::string& line) {
 	const std::vector<std::string> cmd_args = StringHelper::Split(line, " ");
 	if (this->Commands.contains(cmd_args[0])) {
 		const CommandEntry entry = this->Commands[cmd_args[0]];
-		if(!entry.handler(cmd_args) && !entry.arguments.empty())
-			this->Log[this->selected_channel].push_back({ "[SOH] Usage: " + cmd_args[0] + " " + BuildUsage(entry), ERROR_LVL});
+		if (!entry.handler(cmd_args) && !entry.arguments.empty()) {
+			this->Log[this->selected_channel].push_back({ "[SOH] Usage: " + cmd_args[0] + " " + BuildUsage(entry), ERROR_LVL });
+			SohImGui::ReadText("Usage: " + cmd_args[0] + " " + BuildTTSFriendlyUsage(entry), false);
+		}
 		return;
 	}
 	this->Log[this->selected_channel].push_back({ "[SOH] Command not found", ERROR_LVL });
+	SohImGui::ReadText("Command not found", false);
 }
 
 int Console::CallbackStub(ImGuiInputTextCallbackData* data) {
@@ -325,4 +339,6 @@ void Console::Append(const std::string& channel, Priority priority, const char* 
 	buf[IM_ARRAYSIZE(buf) - 1] = 0;
 	va_end(args);
 	this->Log[channel].push_back({ std::string(buf), priority });
+	if (channel == "Main")
+		SohImGui::ReadText(std::string(buf), false);
 }

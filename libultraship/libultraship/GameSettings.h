@@ -57,6 +57,11 @@ struct SoHConfigType {
     struct {
         bool show = false;
     } graphics;
+
+    // Accessibility
+    struct {
+        bool enable_tts = false;
+    } accessibility;
 };
 
 enum SeqPlayers {
@@ -72,6 +77,7 @@ enum SeqPlayers {
 #define CONTROLLER_SECTION "CONTROLLER SECTION"
 #define ENHANCEMENTS_SECTION "ENHANCEMENT SETTINGS"
 #define CHEATS_SECTION "CHEATS SETTINGS"
+#define ACCESSIBILITY_SECTION "ACCESSIBILITY SECTION"
 
 namespace Game {
     extern SoHConfigType Settings;

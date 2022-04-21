@@ -28,6 +28,7 @@ namespace Game {
     const std::string ControllerSection = CONTROLLER_SECTION;
     const std::string EnhancementSection = ENHANCEMENTS_SECTION;
     const std::string CheatSection = CHEATS_SECTION;
+    const std::string AccessibilitySection = ACCESSIBILITY_SECTION;
 
     void UpdateAudio() {
         Audio_SetGameVolume(SEQ_BGM_MAIN, Settings.audio.music_main);
@@ -130,6 +131,9 @@ namespace Game {
         Settings.cheats.super_tunic = stob(Conf[CheatSection]["super_tunic"]);
         CVar_SetS32("gSuperTunic", Settings.cheats.super_tunic);
 
+        Settings.accessibility.enable_tts = stob(Conf[AccessibilitySection]["enable_tts"]);
+        CVar_SetS32("gMessageTTS", Settings.accessibility.enable_tts);
+
         UpdateAudio();
     }
 
@@ -176,6 +180,9 @@ namespace Game {
         Conf[CheatSection]["climb_everything"] = std::to_string(Settings.cheats.climb_everything);
         Conf[CheatSection]["moon_jump_on_l"] = std::to_string(Settings.cheats.moon_jump_on_l);
         Conf[CheatSection]["super_tunic"] = std::to_string(Settings.cheats.super_tunic);
+
+        // Accessibility
+        Conf[AccessibilitySection]["enable_tts"] = std::to_string(Settings.accessibility.enable_tts);
 
         Conf.Save();
     }

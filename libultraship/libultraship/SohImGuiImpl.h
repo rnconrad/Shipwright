@@ -65,7 +65,12 @@ namespace SohImGui {
     void Render(void);
     void CancelFrame(void);
     void ShowCursor(bool hide, Dialogues w);
+    void ReadText(std::string text, bool force);
     void BindCmd(const std::string& cmd, CommandEntry entry);
+    bool BeginMenu(const char* label, bool enabled, int first_or_last_item);
+    bool Checkbox(const char* label, bool* v);
+    bool MenuItem(const char* label, const char* shortcut, bool* p_selected, bool enabled);
+    bool SliderFloat(const char* label, const char* str_id, float* v, float v_min, float v_max, const char* format, ImGuiSliderFlags flags);
     void AddWindow(const std::string& category, const std::string& name, WindowDrawFunc drawFunc);
     void LoadResource(const std::string& name, const std::string& path, const ImVec4& tint = ImVec4(1, 1, 1, 1));
     ImTextureID GetTextureByID(int id);
