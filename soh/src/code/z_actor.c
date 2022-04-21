@@ -3,6 +3,7 @@
 
 #include "overlays/actors/ovl_Arms_Hook/z_arms_hook.h"
 #include "overlays/actors/ovl_En_Part/z_en_part.h"
+#include "overlays/actors/ovl_Scene_Exit/z_scene_exit.h"
 #include "objects/gameplay_keep/gameplay_keep.h"
 #include "objects/gameplay_dangeon_keep/gameplay_dangeon_keep.h"
 #include "objects/object_bdoor/object_bdoor.h"
@@ -2506,6 +2507,9 @@ void Actor_FaultPrint(Actor* actor, char* command) {
     FaultDrawer_Printf("ACTOR NAME %08x:%s", actor, name);
 }
 
+Actor* gActorIdTable[ACTOR_NUMBER_MAX];
+s32 gActorIdCounter;
+
 void Actor_Draw(GlobalContext* globalCtx, Actor* actor) {
     FaultClient faultClient;
     Lights* lights;
@@ -2553,7 +2557,22 @@ void Actor_Draw(GlobalContext* globalCtx, Actor* actor) {
         }
     }
 
+
+    if (globalCtx->state.gfxCtx->unk_014 == 1) {
+        u32 actorId = (u32)actor->id;
+        if (actor->category == ACTORCAT_BG) {
+            actorId = 0;
+        }
+        gDPSetOverrideColor(POLY_OPA_DISP++, 0, 0, 0x50, 0, gActorIdCounter & 0xFF, 255);
+        gDPSetOverrideColor(POLY_XLU_DISP++, 0, 0, 0x50, 0, gActorIdCounter & 0xFF, 255);
+    }
+
     actor->draw(actor, globalCtx);
+
+    if (globalCtx->state.gfxCtx->unk_014 == 1) {
+        gDPSetOverrideColor(POLY_OPA_DISP++, 0, 0, 0, 0, 0, 0);
+        gDPSetOverrideColor(POLY_XLU_DISP++, 0, 0, 0, 0, 0, 0);
+    }
 
     if (actor->colorFilterTimer != 0) {
         if (actor->colorFilterParams & 0x2000) {
@@ -2643,6 +2662,8 @@ void func_8003115C(GlobalContext* globalCtx, s32 numInvisibleActors, Actor** inv
         // "Magic lens invisible Actor display"
         gDPNoOpString(POLY_OPA_DISP++, "魔法のメガネ 見えないＡcｔｏｒ表示", i);
         Actor_Draw(globalCtx, *(invisibleActor++));
+        gActorIdTable[gActorIdCounter - 1] = invisibleActors[i];
+        gActorIdCounter++;
     }
 
     // "Magic lens invisible Actor display END"
@@ -2702,6 +2723,7 @@ void func_800315AC(GlobalContext* globalCtx, ActorContext* actorCtx) {
     s32 i;
 
     invisibleActorCounter = 0;
+    gActorIdCounter = 1;
 
     OPEN_DISPS(globalCtx->state.gfxCtx, "../z_actor.c", 6336);
 
@@ -2753,6 +2775,8 @@ void func_800315AC(GlobalContext* globalCtx, ActorContext* actorCtx) {
                         if ((HREG(64) != 1) || ((HREG(65) != -1) && (HREG(65) != HREG(66))) || (HREG(72) == 0)) {
                             Actor_Draw(globalCtx, actor);
                             actor->isDrawn = true;
+                            gActorIdTable[gActorIdCounter - 1] = actor;
+                            gActorIdCounter++;
                         }
                     }
                 }
@@ -2762,12 +2786,14 @@ void func_800315AC(GlobalContext* globalCtx, ActorContext* actorCtx) {
         }
     }
 
-    if ((HREG(64) != 1) || (HREG(73) != 0)) {
-        Effect_DrawAll(globalCtx->state.gfxCtx);
-    }
+    if (globalCtx->state.gfxCtx->unk_014 == 1) {
+        if ((HREG(64) != 1) || (HREG(73) != 0)) {
+            Effect_DrawAll(globalCtx->state.gfxCtx);
+        }
 
-    if ((HREG(64) != 1) || (HREG(74) != 0)) {
-        EffectSs_DrawAll(globalCtx);
+        if ((HREG(64) != 1) || (HREG(74) != 0)) {
+            EffectSs_DrawAll(globalCtx);
+        }
     }
 
     if ((HREG(64) != 1) || (HREG(72) != 0)) {
@@ -2781,16 +2807,18 @@ void func_800315AC(GlobalContext* globalCtx, ActorContext* actorCtx) {
 
     Actor_DrawFaroresWindPointer(globalCtx);
 
-    if (IREG(32) == 0) {
-        Lights_DrawGlow(globalCtx);
-    }
+    if (globalCtx->state.gfxCtx->unk_014 == 1) {
+        if (IREG(32) == 0) {
+            Lights_DrawGlow(globalCtx);
+        }
 
-    if ((HREG(64) != 1) || (HREG(75) != 0)) {
-        TitleCard_Draw(globalCtx, &actorCtx->titleCtx);
-    }
+        if ((HREG(64) != 1) || (HREG(75) != 0)) {
+            TitleCard_Draw(globalCtx, &actorCtx->titleCtx);
+        }
 
-    if ((HREG(64) != 1) || (HREG(76) != 0)) {
-        CollisionCheck_DrawCollision(globalCtx, &globalCtx->colChkCtx);
+        if ((HREG(64) != 1) || (HREG(76) != 0)) {
+            CollisionCheck_DrawCollision(globalCtx, &globalCtx->colChkCtx);
+        }
     }
 
     CLOSE_DISPS(globalCtx->state.gfxCtx, "../z_actor.c", 6563);
@@ -5906,4 +5934,59 @@ s32 func_80038290(GlobalContext* globalCtx, Actor* actor, Vec3s* arg2, Vec3s* ar
     func_80037FC8(actor, &sp24, arg2, arg3);
 
     return true;
+}
+
+void Actor_SpawnSceneExitActors(GlobalContext* globalCtx) {
+    struct ExitPoly {
+        CollisionPoly* poly;
+        SceneExit* actor;
+    };
+    s32 exitPolyListSize = 32;
+    struct ExitPoly* exitPolys = malloc(sizeof(struct ExitPoly) * exitPolyListSize);
+    memset(exitPolys, 0, sizeof(struct ExitPoly) * exitPolyListSize);
+
+    CollisionPoly* polyList = globalCtx->colCtx.colHeader->polyList;
+    Vec3s* vtxList = globalCtx->colCtx.colHeader->vtxList;
+    Vec3f vtx[3];
+    for (s32 i = 0; i < globalCtx->colCtx.colHeader->numPolygons; i++) {
+        u32 exitId = SurfaceType_GetSceneExitIndex(&globalCtx->colCtx, &polyList[i], BGCHECK_SCENE);
+        if (exitId == 0)
+            continue;
+
+        struct ExitPoly* exitPoly = NULL;
+        Actor* exitActor = NULL;
+        for (int e = 0; e < exitPolyListSize; e++) {
+            if (exitPolys[e].poly == NULL) {
+                if (exitPoly == NULL) {
+                    exitPoly = &exitPolys[e];
+                }
+                break;
+            } else if (CollisionPoly_PolysShareVertex(exitPolys[e].poly, &polyList[i], vtxList)) {
+                if (exitActor == NULL) {
+                    exitActor = exitPolys[e].actor;
+                } else if (exitActor != exitPolys[e].actor) {
+                    //TODO: merge triangles into single actor
+                }
+            }
+
+            if (e == exitPolyListSize - 1 && exitActor == NULL) {
+                exitPolys = realloc(exitPolys, sizeof(struct ExitPoly) * exitPolyListSize * 2);
+                memset(exitPolys + exitPolyListSize, 0, sizeof(struct ExitPoly) * exitPolyListSize);
+                exitPolyListSize *= 2;
+            }
+        }
+
+        if (exitActor == NULL) {
+            exitActor = Actor_Spawn(&globalCtx->actorCtx, globalCtx, ACTOR_SCENE_EXIT, 0, 0, 0, 0, 0, 0, exitId);
+        }
+        exitPoly->poly = &polyList[i];
+        exitPoly->actor = exitActor;
+
+        for (int v = 0; v < 3; v++) {
+            Math_Vec3s_ToVec3f(&vtx[v], &vtxList[COLPOLY_VTX_INDEX(polyList[i].vtxData[v])]);
+        }
+        SceneExit_AddTriangle((SceneExit*)exitActor, &vtx);
+    }
+
+    free(exitPolys);
 }

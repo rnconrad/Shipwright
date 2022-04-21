@@ -823,6 +823,7 @@
     <ClCompile Include="src\overlays\actors\ovl_Oceff_Wipe\z_oceff_wipe.c" />
     <ClCompile Include="src\overlays\actors\ovl_player_actor\z_player.c" />
     <ClCompile Include="src\overlays\actors\ovl_Shot_Sun\z_shot_sun.c" />
+    <ClCompile Include="src\overlays\actors\ovl_Scene_Exit\z_scene_exit.c" />
     <ClCompile Include="src\overlays\effects\ovl_Effect_Ss_Blast\z_eff_ss_blast.c" />
     <ClCompile Include="src\overlays\effects\ovl_Effect_Ss_Bomb2\z_eff_ss_bomb2.c" />
     <ClCompile Include="src\overlays\effects\ovl_Effect_Ss_Bomb\z_eff_ss_bomb.c" />

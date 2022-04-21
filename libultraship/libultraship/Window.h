@@ -26,6 +26,9 @@ namespace Ship {
 			void SetFullscreen(bool bIsFullscreen);
 			void ShowCursor(bool hide);
 			void ReadText(const char textToRead[]);
+			uint32_t GetFramebufferWidth(int fb);
+			uint32_t GetFramebufferHeight(int fb);
+			void ReadFramebufferPixels(int fb, uint32_t x, uint32_t y, uint32_t width, uint32_t height, uint32_t type, void* data);
 
 			bool IsFullscreen() { return bIsFullscreen; }
 			uint32_t GetCurrentWidth();
