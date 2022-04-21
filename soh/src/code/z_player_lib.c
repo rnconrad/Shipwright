@@ -1437,9 +1437,10 @@ void Player_UpdateWallCue(Player* this, GlobalContext* globalCtx) {
             if (minDist < radarRange) {
                 Math_Vec3f_Diff(&vecClosest, &vecA, &vecB);
                 f32 intoWall = Math3D_Vec3fMagnitude(&vecB);
-                sWallCuePitch = LERP(0.1f, 0.5f, 0.5f); //(intoWall + 60.0f) / 120.0f);
 
-                sWallCueVolume = LERP(0.05f, 0.8f, SQ((radarRange - minDist) / radarRange));
+                sWallCuePitch = LERP(0.1f, 0.5f, 0.5f); //(intoWall + 60.0f) / 120.0f);
+                sWallCueVolume = LERP(0.1f, 1.2f, SQ((radarRange - minDist) / radarRange));
+
                 SkinMatrix_Vec3fMtxFMultXYZ(&globalCtx->viewProjectionMtxF, &vecA, &vecB);
                 SkinMatrix_Vec3fMtxFMultXYZ(&globalCtx->viewProjectionMtxF, &vecClosest, &vecA);
                 Math_Vec3f_Diff(&vecA, &vecB, &sWallCuePosition);
