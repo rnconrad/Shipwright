@@ -3012,6 +3012,113 @@ void KaleidoScope_UpdateDungeonMap(GlobalContext* globalCtx) {
     }
 }
 
+void KaleidoScope_TTS_Update(GlobalContext* globalCtx) {
+    static u16 prevCursorIndex = 0;
+    static u16 prevCursorSpecialPos = 0;
+    static u16 prevCursorPoint[5] = { 0 };
+
+    PauseContext* pauseCtx = &globalCtx->pauseCtx;
+
+    if (pauseCtx->state != 6) {
+        //reset cursor index to so it is announced when pause is reopened
+        prevCursorIndex = -1;
+        return;
+    }
+
+    if ((pauseCtx->debugState != 1) && (pauseCtx->debugState != 2)) {
+        u8 arg[8];
+        if (CHECK_BTN_ALL(globalCtx->state.input[0].press.button, BTN_DUP)) {
+            sprintf(arg, "%d", gSaveContext.health / 16);
+            OTRTextToSpeechCallback(OTRMessage_GetAccessibilityText("text/accessibility_text/accessibility_text_eng", 0x0800 + 0, arg));
+        } else if (CHECK_BTN_ALL(globalCtx->state.input[0].press.button, BTN_DLEFT)) {
+            sprintf(arg, "%d", gSaveContext.magic);
+            OTRTextToSpeechCallback(OTRMessage_GetAccessibilityText("text/accessibility_text/accessibility_text_eng", 0x0800 + 1, arg));
+        } else if (CHECK_BTN_ALL(globalCtx->state.input[0].press.button, BTN_DDOWN)) {
+            sprintf(arg, "%d", gSaveContext.rupees);
+            OTRTextToSpeechCallback(OTRMessage_GetAccessibilityText("text/accessibility_text/accessibility_text_eng", 0x0800 + 2, arg));
+        } else if (CHECK_BTN_ALL(globalCtx->state.input[0].press.button, BTN_DRIGHT)) {
+            //TODO: announce timer?
+        }
+    }
+
+    u16 cursorIndex = (pauseCtx->pageIndex == PAUSE_MAP && !sInDungeonScene) ? PAUSE_WORLD_MAP : pauseCtx->pageIndex;
+    if (prevCursorIndex == cursorIndex &&
+        prevCursorSpecialPos == pauseCtx->cursorSpecialPos &&
+        prevCursorPoint[cursorIndex] == pauseCtx->cursorPoint[cursorIndex]) {
+        return;
+    }
+
+    prevCursorSpecialPos = pauseCtx->cursorSpecialPos;
+
+    if (pauseCtx->cursorSpecialPos > 0) {
+        return;
+    }
+
+    switch (pauseCtx->pageIndex) {
+        case PAUSE_ITEM:
+        {
+            u8 arg[8]; // at least big enough where no s8 string will overflow
+            switch (pauseCtx->cursorItem[PAUSE_ITEM]) {
+                case ITEM_STICK:
+                case ITEM_NUT:
+                case ITEM_BOMB:
+                case ITEM_BOMBCHU:
+                case ITEM_SLINGSHOT:
+                case ITEM_BOW:
+                    sprintf(arg, "%d", AMMO(pauseCtx->cursorItem[PAUSE_ITEM]));
+                    break;
+                case ITEM_BEAN:
+                    sprintf(arg, "%d", BEANS_BOUGHT);
+                    break;
+                default:
+                    arg[0] = '\0';
+            }
+            OTRTextToSpeechCallback(OTRMessage_GetAccessibilityText("text/accessibility_text/accessibility_text_eng",
+                pauseCtx->cursorItem[PAUSE_ITEM]), arg);
+            break;
+        }
+        case PAUSE_MAP:
+            if (sInDungeonScene) {
+                if (pauseCtx->cursorItem[PAUSE_MAP] != PAUSE_ITEM_NONE) {
+                    OTRTextToSpeechCallback(OTRMessage_GetAccessibilityText(
+                        "text/accessibility_text/accessibility_text_eng", pauseCtx->cursorItem[PAUSE_MAP], NULL));
+                }
+            } else {
+                if (CVar_GetS32("gBlind_MessageTTS", 0)) {
+                    OTRTextToSpeechCallback(OTRMessage_GetAccessibilityText(
+                        "text/accessibility_text/accessibility_text_eng", 0x0100 + pauseCtx->cursorPoint[PAUSE_WORLD_MAP], NULL));
+                }
+            }
+            break;
+        case PAUSE_QUEST:
+        {
+            u8 arg[8]; // at least big enough where no s8 string will overflow
+            switch (pauseCtx->cursorItem[PAUSE_QUEST]) {
+                case ITEM_SKULL_TOKEN:
+                    sprintf(arg, "%d", gSaveContext.inventory.gsTokens);
+                    break;
+                case ITEM_HEART_CONTAINER:
+                    sprintf(arg, "%d", (((gSaveContext.inventory.questItems & 0xF0000000) & 0xF0000000) >> 0x1C));
+                    break;
+                default:
+                    arg[0] = '\0';
+            }
+            OTRTextToSpeechCallback(
+                OTRMessage_GetAccessibilityText("text/accessibility_text/accessibility_text_eng", pauseCtx->cursorItem[PAUSE_QUEST], arg));
+            break;
+        }
+        case PAUSE_EQUIP:
+            OTRTextToSpeechCallback(OTRMessage_GetAccessibilityText("text/accessibility_text/accessibility_text_eng",
+                pauseCtx->cursorItem[PAUSE_EQUIP], NULL));
+            break;
+        default:
+            break;
+    }
+
+    prevCursorIndex = cursorIndex;
+    memcpy(prevCursorPoint, pauseCtx->cursorPoint, sizeof(prevCursorPoint));
+}
+
 void KaleidoScope_Update(GlobalContext* globalCtx)
 {
     static s16 D_8082B258 = 0;
@@ -4038,5 +4145,9 @@ void KaleidoScope_Update(GlobalContext* globalCtx)
             Player_SetEquipmentData(globalCtx, player);
             osSyncPrintf(VT_RST);
             break;
+    }
+
+    if (CVar_GetS32("gBlind_MessageTTS", 0)) {
+        KaleidoScope_TTS_Update(globalCtx);
     }
 }
