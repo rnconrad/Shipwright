@@ -61,6 +61,13 @@ struct SoHConfigType {
     // Accessibility
     struct {
         bool enable_tts = false;
+        bool accessible_interaction = false;
+        bool aim_audio_cues = false;
+        bool d_pad_look = false;
+        bool more_targets = false;
+        bool no_camera_turn = false;
+        bool object_cue = false;
+        bool spatial_audio_cues = false;
     } accessibility;
 };
 

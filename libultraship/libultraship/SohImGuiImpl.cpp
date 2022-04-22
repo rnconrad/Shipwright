@@ -63,6 +63,7 @@ namespace SohImGui {
     ImGuiID first_id, last_id;
     std::map<ImGuiID, std::string> tts_map = {};
     std::regex num_reg("([0-9]+ %)");
+    std::regex float_point_reg("(\\d*\\.\\d*)$");
 
     std::map<std::string, std::vector<std::string>> windowCategories;
     std::map<std::string, CustomWindow> customWindows;
@@ -195,6 +196,11 @@ namespace SohImGui {
         tts_map[ImGui::GetID(str_id)] = label;
         ImGui::Text(label);
         return ImGui::SliderFloat(str_id, v, v_min, v_max, format, flags);
+    }
+
+    bool SohImGui::Button(const char* label, const ImVec2& size_arg = ImVec2(0, 0)) {
+        tts_map[ImGui::GetID(label)] = label;
+        return ImGui::Button(label, size_arg);
     }
 
     void LoadTexture(const std::string& name, const std::string& path) {
@@ -434,9 +440,15 @@ namespace SohImGui {
                     
 
                     if (ImGui::IsAnyItemActive()) {
+                        std::string label = tts_map[focused];
+                        std::stringstream stream;
+
                         // We are focused inside a slider in edit mode, just read back the value please
-                        std::cmatch slider_val;
-                        regex_search(tts_map[focused].c_str(), slider_val, num_reg);
+                        std::smatch slider_val;
+                        regex_search(label, slider_val, num_reg);
+                        // decimal perhaps?
+                        if (slider_val.size() <= 0)
+                            regex_search(label, slider_val, float_point_reg);
                         ReadText(slider_val.str());
                     }
                     else {
@@ -448,9 +460,12 @@ namespace SohImGui {
             if (ImGui::IsKeyReleased(ImGuiKey_Space)) {
                 if (ImGui::IsAnyItemActive()) {
                     std::string cmd_input = "CMDInput";
-                    ImGuiWindow* console_window = ImGui::FindWindowByName("Console");
-                    ImGuiID cmd_input_id = ImGui::GetIDWithSeed(cmd_input.c_str(), cmd_input.c_str() + cmd_input.size(), console_window->ID);
+                    ImGuiID cmd_input_id;
                     ImGuiID active = ImGui::GetActiveID();
+                    ImGuiWindow* console_window = ImGui::FindWindowByName("Console");
+                    if (console_window != nullptr) {
+                        cmd_input_id = ImGui::GetIDWithSeed(cmd_input.c_str(), cmd_input.c_str() + cmd_input.size(), console_window->ID); 
+                    }
                     if (active != cmd_input_id) {
                         if (ImGui::IsAnyItemFocused()) {
                             ReadText(StringHelper::Sprintf("selected %s", tts_map[active].c_str()));
@@ -492,8 +507,50 @@ namespace SohImGui {
 
             if (SohImGui::BeginMenu("Accessibility", true, 0)) {
                 if (SohImGui::Checkbox("Text-To-Speech", &Game::Settings.accessibility.enable_tts)) {
-                    CVar_SetS32(const_cast<char*>("gMessageTTS"), Game::Settings.accessibility.enable_tts);
+                    CVar_SetS32("gBlind_MessageTTS", Game::Settings.accessibility.enable_tts);
                     ReadText(StringHelper::Sprintf("Text-To-Speech %s", (Game::Settings.accessibility.enable_tts ? "enabled" : "disabled")), true);
+                    needs_save = true;
+                }
+
+                if (SohImGui::Checkbox("Accessible Interaction", &Game::Settings.accessibility.accessible_interaction)) {
+                    CVar_SetS32("gBlind_AccessibleInteraction", Game::Settings.accessibility.accessible_interaction);
+                    ReadText(StringHelper::Sprintf("Accessible Interaction %s", (Game::Settings.accessibility.accessible_interaction ? "enabled" : "disabled")), true);
+                    needs_save = true;
+                }
+
+                if (SohImGui::Checkbox("Aim Audio Cues", &Game::Settings.accessibility.aim_audio_cues)) {
+                    CVar_SetS32("gBlind_AimAudioCues", Game::Settings.accessibility.aim_audio_cues);
+                    ReadText(StringHelper::Sprintf("Aim Audio Cues %s", (Game::Settings.accessibility.aim_audio_cues ? "enabled" : "disabled")), true);
+                    needs_save = true;
+                }
+
+                if (SohImGui::Checkbox("D-Pad Look", &Game::Settings.accessibility.d_pad_look)) {
+                    CVar_SetS32("gBlind_DPadLook", Game::Settings.accessibility.d_pad_look);
+                    ReadText(StringHelper::Sprintf("D-Pad Look %s", (Game::Settings.accessibility.d_pad_look ? "enabled" : "disabled")), true);
+                    needs_save = true;
+                }
+
+                if (SohImGui::Checkbox("More Targets", &Game::Settings.accessibility.more_targets)) {
+                    CVar_SetS32("gBlind_MoreTargets", Game::Settings.accessibility.more_targets);
+                    ReadText(StringHelper::Sprintf("More Targets %s", (Game::Settings.accessibility.more_targets ? "enabled" : "disabled")), true);
+                    needs_save = true;
+                }
+
+                if (SohImGui::Checkbox("No Camera Turn", &Game::Settings.accessibility.no_camera_turn)) {
+                    CVar_SetS32("gBlind_NoCameraTurn", Game::Settings.accessibility.no_camera_turn);
+                    ReadText(StringHelper::Sprintf("No Camera Turn %s", (Game::Settings.accessibility.no_camera_turn ? "enabled" : "disabled")), true);
+                    needs_save = true;
+                }
+
+                if (SohImGui::Checkbox("Object Cues", &Game::Settings.accessibility.object_cue)) {
+                    CVar_SetS32("gBlind_ObjectCue", Game::Settings.accessibility.object_cue);
+                    ReadText(StringHelper::Sprintf("Object Cues %s", (Game::Settings.accessibility.object_cue ? "enabled" : "disabled")), true);
+                    needs_save = true;
+                }
+
+                if (SohImGui::Checkbox("Spatial Audio Cues", &Game::Settings.accessibility.spatial_audio_cues)) {
+                    CVar_SetS32("gBlind_SpatialAudioCues", Game::Settings.accessibility.spatial_audio_cues);
+                    ReadText(StringHelper::Sprintf("Spatial Audio Cues %s", (Game::Settings.accessibility.spatial_audio_cues ? "enabled" : "disabled")), true);
                     needs_save = true;
                 }
 
@@ -521,9 +578,10 @@ namespace SohImGui {
                     needs_save = true;
                 }
 
-                if (ImGui::Button("Recalibrate Gyro")) {
+                if (SohImGui::Button("Recalibrate Gyro")) {
                     Game::Settings.controller.gyroDriftX = 0;
                     Game::Settings.controller.gyroDriftY = 0;
+                    ReadText("Gyro recalibrated");
                 }
 
                 ImGui::Separator();
@@ -542,7 +600,7 @@ namespace SohImGui {
 
                 ImGui::Separator();
 
-                if (SohImGui::Checkbox("Dpad Support on Pause and File Select", &Game::Settings.controller.dpad_pause_name)) {
+                if (SohImGui::Checkbox("DPad Support on Pause and File Select", &Game::Settings.controller.dpad_pause_name)) {
                     CVar_SetS32("gDpadPauseName", Game::Settings.controller.dpad_pause_name);
                     needs_save = true;
                 }
