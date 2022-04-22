@@ -777,6 +777,18 @@ extern "C" uint32_t OTRGetCurrentHeight() {
     return OTRGlobals::Instance->context->GetWindow()->GetCurrentHeight();
 }
 
+extern "C" uint32_t OTRGetFramebufferWidth(int fb) {
+    return OTRGlobals::Instance->context->GetWindow()->GetFramebufferWidth(fb);
+}
+
+extern "C" uint32_t OTRGetFramebufferHeight(int fb) {
+    return OTRGlobals::Instance->context->GetWindow()->GetFramebufferHeight(fb);
+}
+
+extern "C" void OTRReadFramebufferPixels(int fb, u32 x, uint32_t y, uint32_t width, uint32_t height, uint32_t type, void* data) {
+    OTRGlobals::Instance->context->GetWindow()->ReadFramebufferPixels(fb, x, y, width, height, type, data);
+}
+
 extern "C" void OTRTextToSpeechCallback(char* text) {
     OTRGlobals::Instance->context->GetWindow()->ReadText(text);
 }

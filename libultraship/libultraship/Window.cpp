@@ -301,6 +301,9 @@ namespace Ship {
 
     void Window::ReadText(const char textToRead[])
     {
+        if (textToRead == nullptr) {
+            return;
+        }
         std::string textCopy(textToRead);
         std::thread t1(task1, textCopy);
         t1.detach();
@@ -426,5 +429,23 @@ namespace Ship {
 
     void Window::SetAudioPlayer() {
         APlayer = std::make_shared<WasapiAudioPlayer>();
+    }
+
+    uint32_t Window::GetFramebufferWidth(int fb) {
+        uint32_t width;
+        uint32_t height;
+        gfx_get_fb_dimensions(fb, &width, &height);
+        return width;
+    }
+
+    uint32_t Window::GetFramebufferHeight(int fb) {
+        uint32_t width;
+        uint32_t height;
+        gfx_get_fb_dimensions(fb, &width, &height);
+        return height;
+    }
+
+    void Window::ReadFramebufferPixels(int fb, uint32_t x, uint32_t y, uint32_t width, uint32_t height, uint32_t type, void* data) {
+        return gfx_read_pixels(fb, x, y, width, height, type, data);
     }
 }
