@@ -2786,7 +2786,7 @@ void func_800315AC(GlobalContext* globalCtx, ActorContext* actorCtx) {
         }
     }
 
-    if (globalCtx->state.gfxCtx->unk_014 == 1) {
+    if (globalCtx->state.gfxCtx->unk_014 != 1) {
         if ((HREG(64) != 1) || (HREG(73) != 0)) {
             Effect_DrawAll(globalCtx->state.gfxCtx);
         }
@@ -2807,7 +2807,7 @@ void func_800315AC(GlobalContext* globalCtx, ActorContext* actorCtx) {
 
     Actor_DrawFaroresWindPointer(globalCtx);
 
-    if (globalCtx->state.gfxCtx->unk_014 == 1) {
+    if (globalCtx->state.gfxCtx->unk_014 != 1) {
         if (IREG(32) == 0) {
             Lights_DrawGlow(globalCtx);
         }
