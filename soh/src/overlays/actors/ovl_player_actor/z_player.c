@@ -10742,13 +10742,13 @@ void Player_UpdateCommon(Player* this, GlobalContext* globalCtx, Input* input) {
     Collider_ResetQuadAT(globalCtx, &this->shieldQuad.base);
 
     if (CVar_GetS32("gBlind_AimAudioCues", 0)) {
-        Player_UpdateAimCue(this, globalCtx);
+        Player_UpdateTargetCues(this, globalCtx);
     }
 
     if (CVar_GetS32("gBlind_SpatialAudioCues", 0)) {
         Player_UpdateSpatialCues(this, globalCtx);
-	}
-	
+    }
+
     if (CVar_GetS32("gBlind_ObjectCue", 0)) {
         Player_UpdateVisionCue(this, globalCtx, input);
     }
