@@ -131,8 +131,30 @@ namespace Game {
         Settings.cheats.super_tunic = stob(Conf[CheatSection]["super_tunic"]);
         CVar_SetS32("gSuperTunic", Settings.cheats.super_tunic);
 
+        // Accessibility
         Settings.accessibility.enable_tts = stob(Conf[AccessibilitySection]["enable_tts"]);
-        CVar_SetS32("gMessageTTS", Settings.accessibility.enable_tts);
+        CVar_SetS32("gBlind_MessageTTS", Settings.accessibility.enable_tts);
+
+        Settings.accessibility.accessible_interaction = stob(Conf[AccessibilitySection]["accessible_interaction"]);
+        CVar_SetS32("gBlind_AccessibleInteraction", Settings.accessibility.accessible_interaction);
+
+        Settings.accessibility.aim_audio_cues = stob(Conf[AccessibilitySection]["aim_audio_cues"]);
+        CVar_SetS32("gBlind_AimAudioCues", Settings.accessibility.aim_audio_cues);
+
+        Settings.accessibility.d_pad_look = stob(Conf[AccessibilitySection]["d_pad_look"]);
+        CVar_SetS32("gBlind_DPadLook", Settings.accessibility.d_pad_look);
+
+        Settings.accessibility.more_targets = stob(Conf[AccessibilitySection]["more_targets"]);
+        CVar_SetS32("gBlind_MoreTargets", Settings.accessibility.more_targets);
+
+        Settings.accessibility.no_camera_turn = stob(Conf[AccessibilitySection]["no_camera_turn"]);
+        CVar_SetS32("gBlind_NoCameraTurn", Settings.accessibility.no_camera_turn);
+
+        Settings.accessibility.object_cue = stob(Conf[AccessibilitySection]["object_cue"]);
+        CVar_SetS32("gBlind_ObjectCue", Settings.accessibility.object_cue);
+
+        Settings.accessibility.spatial_audio_cues = stob(Conf[AccessibilitySection]["spatial_audio_cues"]);
+        CVar_SetS32("gBlind_SpatialAudioCues", Settings.accessibility.spatial_audio_cues);
 
         UpdateAudio();
     }
@@ -183,6 +205,13 @@ namespace Game {
 
         // Accessibility
         Conf[AccessibilitySection]["enable_tts"] = std::to_string(Settings.accessibility.enable_tts);
+        Conf[AccessibilitySection]["accessible_interaction"] = std::to_string(Settings.accessibility.accessible_interaction);
+        Conf[AccessibilitySection]["aim_audio_cues"] = std::to_string(Settings.accessibility.aim_audio_cues);
+        Conf[AccessibilitySection]["d_pad_look"] = std::to_string(Settings.accessibility.d_pad_look);
+        Conf[AccessibilitySection]["more_targets"] = std::to_string(Settings.accessibility.more_targets);
+        Conf[AccessibilitySection]["no_camera_turn"] = std::to_string(Settings.accessibility.no_camera_turn);
+        Conf[AccessibilitySection]["object_cue"] = std::to_string(Settings.accessibility.object_cue);
+        Conf[AccessibilitySection]["spatial_audio_cues"] = std::to_string(Settings.accessibility.spatial_audio_cues);
 
         Conf.Save();
     }
