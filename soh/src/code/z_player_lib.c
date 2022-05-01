@@ -1845,7 +1845,7 @@ void Player_UpdateVisionCue(Player* this, GlobalContext* globalCtx, Input* input
     if (CHECK_BTN_ALL(input->press.button, BTN_DLEFT)) {
         sSceneInfoContinuous = false;
         if (sFocusedVisibleItemIdx == 0) {
-            Audio_PlaySoundGeneral(NA_SE_IT_SWORD_IMPACT, &D_801333D4, 4, &D_801333E0, &D_801333E0, &D_801333E8);
+            //Audio_PlaySoundGeneral(NA_SE_IT_SWORD_IMPACT, &D_801333D4, 4, &D_801333E0, &D_801333E0, &D_801333E8);
         } else {
             Audio_PlaySoundGeneral(NA_SE_SY_CURSOR, &D_801333D4, 4, &D_801333E0, &D_801333E0, &D_801333E8);
             sFocusedVisibleItemIdx--;
@@ -1855,7 +1855,7 @@ void Player_UpdateVisionCue(Player* this, GlobalContext* globalCtx, Input* input
         sSceneInfoContinuous = false;
         if (sFocusedVisibleItemIdx == ARRAY_COUNT(sTopVisibleItems) - 1 ||
             sTopVisibleItems[sFocusedVisibleItemIdx + 1].actor == NULL) {
-            Audio_PlaySoundGeneral(NA_SE_IT_SWORD_IMPACT, &D_801333D4, 4, &D_801333E0, &D_801333E0, &D_801333E8);
+            //Audio_PlaySoundGeneral(NA_SE_IT_SWORD_IMPACT, &D_801333D4, 4, &D_801333E0, &D_801333E0, &D_801333E8);
         }
         else {
             Audio_PlaySoundGeneral(NA_SE_SY_CURSOR, &D_801333D4, 4, &D_801333E0, &D_801333E0, &D_801333E8);
@@ -1989,14 +1989,19 @@ void Player_UpdateVisionCue(Player* this, GlobalContext* globalCtx, Input* input
                                         OTRMessage_GetAccessibilityText(
                                             "text/accessibility_text/accessibility_text_eng", 0x0300 + sceneId));
                 ASSERT(result < sizeof(arg), "Text arg buffer exceeded", __FILE__, __LINE__);
+
+                textId = 0x1000 + focusedVisibleItem.actor->id;
+            } else {
+                textId = (focusedVisibleItem.actor->params << 16) | (0x1000 + focusedVisibleItem.actor->id);
             }
-            textId = 0x1000 + focusedVisibleItem.actor->id;
         }
-        size_t result =
-            sprintf(announceStr + announceStrLength, "%s",
-                    OTRMessage_GetAccessibilityText("text/accessibility_text/accessibility_text_eng", textId, arg));
-        ASSERT(result < sizeof(announceStr) - announceStrLength, "Text str buffer exceeded", __FILE__, __LINE__);
-        announceStrLength += result;
+        char* accessibilityText =
+            OTRMessage_GetAccessibilityText("text/accessibility_text/accessibility_text_eng", textId, arg);
+        if (accessibilityText != NULL) {
+            size_t result = sprintf(announceStr + announceStrLength, "%s", accessibilityText);
+            ASSERT(result < sizeof(announceStr) - announceStrLength, "Text str buffer exceeded", __FILE__, __LINE__);
+            announceStrLength += result;
+        }
 
         OTRTextToSpeechCallback(announceStr);
 
