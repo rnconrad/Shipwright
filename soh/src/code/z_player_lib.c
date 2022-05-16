@@ -1486,7 +1486,7 @@ void Player_UpdateFallCueClimbing(Player* this, GlobalContext* globalCtx, struct
         }
     }
 
-    if (true) {
+    if (CVar_GetS32("gDebugEnabled", 0)) {
         DebugDisplay_AddObject(vecCurrent.x, vecCurrent.y + 26.0f, vecCurrent.z, 0, currentYaw,
                                0, 1.0f,
                                1.0f, 1.0f,
@@ -1560,7 +1560,7 @@ void Player_UpdateFallCueNormal(Player* this, GlobalContext* globalCtx, struct F
     playerProxy.speedXZ = linearVelocity;
 
     for (int i = 0; i < maxSamples; i++) {
-        if (i % 4 == 0) {
+        if (CVar_GetS32("gDebugEnabled", 0) && i % 4 == 0) {
             DebugDisplay_AddObject(playerProxy.world.pos.x, playerProxy.world.pos.y + 26.0f, playerProxy.world.pos.z,
                                0x4000, 0, 0, 1.0f, 1.0f, 1.0f, (fallInfo->willFall && !fallInfo->willLandSafely) ? 255 : 0,
                                (!fallInfo->willFall || willGrabLedge) ? 255 : 0, (fallInfo->willLandSafely) ? 255 : 0, 255,
@@ -1743,7 +1743,7 @@ void Player_UpdateFallCueNormal(Player* this, GlobalContext* globalCtx, struct F
         }
     }
 
-    if (true) {
+    if (CVar_GetS32("gDebugEnabled", 0)) {
         DebugDisplay_AddObject(playerProxy.world.pos.x, playerProxy.world.pos.y + 26.0f, playerProxy.world.pos.z,
                                0x4000, 0, 0, 1.0f, 1.0f, 1.0f, (fallInfo->willFall && !fallInfo->willLandSafely) ? 255 : 0,
                                (!fallInfo->willFall || willGrabLedge) ? 255 : 0, (fallInfo->willLandSafely) ? 255 : 0, 255,
@@ -2480,6 +2480,7 @@ void Player_ComputeHandAimCue(Player* this, GlobalContext* globalCtx, s32 limbIn
 
     Matrix_Pop();
 }
+
 union VisibleItem {
     Actor* actor;
     u32 polyFlags;
@@ -2499,6 +2500,22 @@ static bool sSceneInfoContinuous;
 
 //TODO: temp, replace with SoundCue
 static f32 sBeaconFreq;
+
+static SoundCue sBeaconCue = 
+{
+    false,
+    { 0.0f, 0.0f, 0.0f },
+    1.0f,
+    1.0f,
+    NA_SE_EV_SHIP_BELL,
+    0,
+    20,
+    0.0f,
+    20,
+    false,
+    0,
+    0
+};
 
 void Player_UpdateVisionCue(Player* this, GlobalContext* globalCtx, Input* input) {
     bool isPlayerInFirstPersonMode = this->stateFlags1 & PLAYER_STATE1_20;
@@ -2644,14 +2661,13 @@ void Player_UpdateVisionCue(Player* this, GlobalContext* globalCtx, Input* input
 
     union VisibleItem focusedVisibleItem = sTopVisibleItems[sFocusedVisibleItemIdx];
 
-    if (sFocusedItemBeaconActive && ((focusedVisibleItem.polyFlags & 0xFFFFFF00) != 0) && (globalCtx->gameplayFrames % 20 == 0)) {
-        //TODO: replace with SoundCue
-        sBeaconFreq = LERP(0.08f, 0.2f, 1.0f - MAX(0.1f, MIN(1.0f, focusedVisibleItem.actor->xyzDistToPlayerSq / SQ(500.0f))));
-        static s8 reverbAdd = 1;
-        static Vec3f pos;
-        Math_Vec3f_Diff(&focusedVisibleItem.actor->projectedPos, &this->actor.projectedPos, &pos);
-        Audio_PlaySoundGeneral(NA_SE_EV_SHIP_BELL, &pos, 4, &sBeaconFreq, &D_801333E0, &reverbAdd);
+    sBeaconCue.active = false;
+    if (sFocusedItemBeaconActive && ((focusedVisibleItem.polyFlags & 0xFFFFFF00) != 0)) {
+        sBeaconCue.active = true;
+        sBeaconCue.pitch = LERP(0.08f, 0.2f, 1.0f - MAX(0.1f, MIN(1.0f, focusedVisibleItem.actor->xyzDistToPlayerSq / SQ(500.0f))));
+        Math_Vec3f_Diff(&focusedVisibleItem.actor->projectedPos, &this->actor.projectedPos, &sBeaconCue.position);
     }
+    SoundCue_Update(&sBeaconCue, globalCtx);
 
     if (focusedVisibleItem.actor != NULL &&
         focusedVisibleItem.actor != sPrevFocusedVisibleItem.actor) {
