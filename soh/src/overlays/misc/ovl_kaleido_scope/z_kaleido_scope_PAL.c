@@ -3031,7 +3031,33 @@ void KaleidoScope_TTS_Update(GlobalContext* globalCtx) {
     static u16 prevCursorSpecialPos = 0;
     static u16 prevCursorPoint[5] = { 0 };
 
+    static u16 prevPauseState = 0;
+    static s16 prevPromptChoice = 0;
+
     PauseContext* pauseCtx = &globalCtx->pauseCtx;
+
+    if (pauseCtx->state != prevPauseState) {
+        if (pauseCtx->state == 12) {
+            OTRTextToSpeechCallback(
+                OTRGetAccessibilityText(0x0800 + 7, NULL));
+        }
+        if (pauseCtx->state == 7 || pauseCtx->state == 14) {
+            OTRTextToSpeechCallback(
+                OTRGetAccessibilityText(0x0800 + 8, NULL));
+        } else if (pauseCtx->state == 16) {
+                OTRTextToSpeechCallback(
+                    OTRGetAccessibilityText(0x0800 + 9, NULL));
+        }
+        prevPromptChoice = 0;
+    }
+
+    if (pauseCtx->promptChoice != prevPromptChoice && (pauseCtx->state == 7 || pauseCtx->state == 14 || pauseCtx->state == 16)) {
+        OTRTextToSpeechCallback(
+            OTRGetAccessibilityText(0x0800 + 10 + ((pauseCtx->promptChoice == 0) ? 0 : 1), NULL));
+        prevPromptChoice = pauseCtx->promptChoice;
+    }
+
+    prevPauseState = pauseCtx->state;
 
     if (pauseCtx->state != 6) {
         //reset cursor index to so it is announced when pause is reopened
