@@ -2620,10 +2620,6 @@ void Actor_Draw(GlobalContext* globalCtx, Actor* actor) {
 
 
     if (globalCtx->state.gfxCtx->unk_014 == 1) {
-        u32 actorId = (u32)actor->id;
-        if (actor->category == ACTORCAT_BG) {
-            actorId = 0;
-        }
         gDPSetOverrideColor(POLY_OPA_DISP++, 0, 0, 0x50, 0, gActorIdCounter & 0xFF, 255);
         gDPSetOverrideColor(POLY_XLU_DISP++, 0, 0, 0x50, 0, gActorIdCounter & 0xFF, 255);
     }
@@ -2854,7 +2850,7 @@ void func_800315AC(GlobalContext* globalCtx, ActorContext* actorCtx) {
         }
     }
 
-    if (globalCtx->state.gfxCtx->unk_014 == 1) {
+    if (globalCtx->state.gfxCtx->unk_014 != 1) {
         if ((HREG(64) != 1) || (HREG(73) != 0)) {
             Effect_DrawAll(globalCtx->state.gfxCtx);
         }
@@ -2875,7 +2871,7 @@ void func_800315AC(GlobalContext* globalCtx, ActorContext* actorCtx) {
 
     Actor_DrawFaroresWindPointer(globalCtx);
 
-    if (globalCtx->state.gfxCtx->unk_014 == 1) {
+    if (globalCtx->state.gfxCtx->unk_014 != 1) {
         if (IREG(32) == 0) {
             Lights_DrawGlow(globalCtx);
         }

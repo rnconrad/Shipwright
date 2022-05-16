@@ -2480,8 +2480,15 @@ void Player_ComputeHandAimCue(Player* this, GlobalContext* globalCtx, s32 limbIn
 
     Matrix_Pop();
 }
+union VisibleItem {
+    Actor* actor;
+    u32 polyFlags;
+};
+static union VisibleItem sTopVisibleItems[10];
+static union VisibleItem sPrevFocusedVisibleItem;
+static s32 sFocusedVisibleItemIdx;
+static bool sFocusedItemBeaconActive;
 
-static Actor* prevActorInView;
 extern Actor* gActorIdTable[ACTOR_NUMBER_MAX];
 extern int fbSceneInfo;
 static u8* sceneInfoFramebuffer = NULL;
@@ -2490,9 +2497,8 @@ static s32 sceneInfoFbHeight;
 static bool sFirstPersonStart;
 static bool sSceneInfoContinuous;
 
-//without a way to get buffer sizes right now, this adds a bit of padding
-//to account for the difference between the window size and the framebuffer size
-static const float tmpBufferPadding = 120.0f;
+//TODO: temp, replace with SoundCue
+static f32 sBeaconFreq;
 
 void Player_UpdateVisionCue(Player* this, GlobalContext* globalCtx, Input* input) {
     bool isPlayerInFirstPersonMode = this->stateFlags1 & PLAYER_STATE1_20;
@@ -2501,27 +2507,52 @@ void Player_UpdateVisionCue(Player* this, GlobalContext* globalCtx, Input* input
         sFirstPersonStart = true;
         sSceneInfoContinuous = true;
     } else if (!isPlayerInFirstPersonMode && sFirstPersonStart) {
-        prevActorInView = NULL;
         sFirstPersonStart = false;
         sSceneInfoContinuous = false;
     }
 
-    bool readNow = sSceneInfoContinuous && (globalCtx->state.frames % 20 == 0);
-    bool readMultipleItems = false;
+    bool needsUpdate = false;
 
-    if (CHECK_BTN_ALL(input->cur.button, BTN_DDOWN)) {
-        prevActorInView = NULL;
+    if (CHECK_BTN_ALL(input->press.button, BTN_DUP)) {
         sSceneInfoContinuous = false;
-        readNow = true;
+        sPrevFocusedVisibleItem.actor = NULL;
+        needsUpdate = true;
     }
-    if (CHECK_BTN_ALL(input->cur.button, BTN_DRIGHT)) {
-        prevActorInView = NULL;
+    if (CHECK_BTN_ALL(input->press.button, BTN_DDOWN)) {
         sSceneInfoContinuous = false;
-        readMultipleItems = true;
-        readNow = true;
+        if (!sFocusedItemBeaconActive && sPrevFocusedVisibleItem.actor != NULL) {
+            sFocusedItemBeaconActive = true;
+        } else {
+            sFocusedItemBeaconActive = false;
+        }
+    }
+    if (CHECK_BTN_ALL(input->press.button, BTN_DLEFT)) {
+        sSceneInfoContinuous = false;
+        if (sFocusedVisibleItemIdx == 0) {
+            //Audio_PlaySoundGeneral(NA_SE_IT_SWORD_IMPACT, &D_801333D4, 4, &D_801333E0, &D_801333E0, &D_801333E8);
+        } else {
+            Audio_PlaySoundGeneral(NA_SE_SY_CURSOR, &D_801333D4, 4, &D_801333E0, &D_801333E0, &D_801333E8);
+            sFocusedVisibleItemIdx--;
+        }
+    }
+    if (CHECK_BTN_ALL(input->press.button, BTN_DRIGHT)) {
+        sSceneInfoContinuous = false;
+        if (sFocusedVisibleItemIdx == ARRAY_COUNT(sTopVisibleItems) - 1 ||
+            sTopVisibleItems[sFocusedVisibleItemIdx + 1].actor == NULL) {
+            //Audio_PlaySoundGeneral(NA_SE_IT_SWORD_IMPACT, &D_801333D4, 4, &D_801333E0, &D_801333E0, &D_801333E8);
+        }
+        else {
+            Audio_PlaySoundGeneral(NA_SE_SY_CURSOR, &D_801333D4, 4, &D_801333E0, &D_801333E0, &D_801333E8);
+            sFocusedVisibleItemIdx++;
+        }
     }
 
-    if (readNow) {
+    needsUpdate = needsUpdate || (sSceneInfoContinuous && (globalCtx->state.frames % 10 == 0));
+
+    if (needsUpdate) {
+        sFocusedVisibleItemIdx = 0;
+        memset(&sTopVisibleItems, 0, sizeof(sTopVisibleItems));
+
         if (sceneInfoFbWidth != OTRGetFramebufferWidth(fbSceneInfo) ||
             sceneInfoFbHeight != OTRGetFramebufferHeight(fbSceneInfo)) {
             if (sceneInfoFramebuffer != NULL) {
@@ -2532,97 +2563,133 @@ void Player_UpdateVisionCue(Player* this, GlobalContext* globalCtx, Input* input
             sceneInfoFbHeight = OTRGetFramebufferHeight(fbSceneInfo);
             sceneInfoFramebuffer = malloc(sceneInfoFbWidth * sceneInfoFbHeight * 4);
         }
-        OTRReadFramebufferPixels(fbSceneInfo, 0, 0, sceneInfoFbWidth, sceneInfoFbHeight - tmpBufferPadding, 0,
+        OTRReadFramebufferPixels(fbSceneInfo, 0, 0, sceneInfoFbWidth, sceneInfoFbHeight, 0,
                                     sceneInfoFramebuffer);
 
-        struct VisibleItem {
+        struct VisibleId {
             u32 id;
             u32 pixelCount;
         };
-        struct VisibleItem topItems[256] = {0};
+        struct VisibleId topIds[256] = {0};
 
         u32 width = sceneInfoFbWidth;
-        u32 height = sceneInfoFbHeight - tmpBufferPadding;
+        u32 height = sceneInfoFbHeight;
         u32 x;
         u32 y;
         u32 offset;
         u32 id;
 
-        u32 widthMargin = width / 8;
-        u32 heightMargin = height / 8;
+        u32 widthMargin = (sSceneInfoContinuous) ? width / 4 : 0;
+        u32 heightMargin = (sSceneInfoContinuous) ? height / 4 : 0;
         for (x = widthMargin; x < width - widthMargin; x++) {
             for (y = heightMargin; y < height - heightMargin; y++) {
                 offset = (x + y * width) * 4;
-                id = sceneInfoFramebuffer[offset + 2] & 0xFF;
-                
+                id = (sceneInfoFramebuffer[offset + 0] << 16) |
+                     (sceneInfoFramebuffer[offset + 1] << 8) |
+                     sceneInfoFramebuffer[offset + 2];
+
                 if (id == 0)
                     continue;
 
                 s32 itemIndex = 0;
                 u32 currItemCount = 0;
                 while (itemIndex < 256) {
-                    if (topItems[itemIndex].id == id) {
-                        topItems[itemIndex].pixelCount++;
-                        currItemCount = topItems[itemIndex].pixelCount;
+                    if (topIds[itemIndex].id == id) {
+                        topIds[itemIndex].pixelCount++;
+                        currItemCount = topIds[itemIndex].pixelCount;
                         break;
-                    } else if (topItems[itemIndex].id == 0) {
-                        topItems[itemIndex].id = id;
-                        topItems[itemIndex].pixelCount = 1;
-                        currItemCount = topItems[itemIndex].pixelCount;
+                    } else if (topIds[itemIndex].id == 0) {
+                        topIds[itemIndex].id = id;
+                        topIds[itemIndex].pixelCount = 1;
+                        currItemCount = topIds[itemIndex].pixelCount;
                         break;
                     }
                     ++itemIndex;
                 }
                 while (--itemIndex >= 0) {
-                    if (topItems[itemIndex].pixelCount > currItemCount) {
+                    if (topIds[itemIndex].pixelCount > currItemCount) {
                         break;
                     }
                     //swap
-                    struct VisibleItem tmp = topItems[itemIndex];
-                    topItems[itemIndex] = topItems[itemIndex + 1];
-                    topItems[itemIndex + 1] = tmp;
+                    struct VisibleId tmp = topIds[itemIndex];
+                    topIds[itemIndex] = topIds[itemIndex + 1];
+                    topIds[itemIndex + 1] = tmp;
                 }
             }
         }
 
-        Actor* topVisibleActors[5] = {0};
-        for (int i = 0; i < 5; i++) {
-            topVisibleActors[i] = (topItems[0].id > 0) ? gActorIdTable[topItems[i].id - 1] : NULL;
-        }
+        s32 topItemIndex = 0;
+        
+        for (int i = 0; i < ARRAY_COUNT(topIds); i++) {
+            if (topIds[i].id == 0)
+                break;
 
-        if (topVisibleActors[0] != NULL && topVisibleActors[0] != prevActorInView) {
-            u8 announceStr[256];
-            s32 announceStrLength = 0;
-            announceStr[0] = '\0';
-            u8 arg[32];
-            for (int i = 0; i < 5; i++) {
-                if (topVisibleActors[i] == NULL)
+            u32 itemType = topIds[i].id & 0xFF0000;
+            if (itemType == 0x500000) {
+                Actor* actor = gActorIdTable[(topIds[i].id & 0xFF) - 1];
+                if (actor->id == ACTOR_PLAYER || actor->id == ACTOR_EN_ELF)
                     continue;
-                if (topVisibleActors[i]->id == ACTOR_PLAYER || topVisibleActors[i]->id == ACTOR_EN_ELF)
-                    continue;
-                if (topVisibleActors[i]->id == ACTOR_SCENE_EXIT) {
-                    u16 exitId = topVisibleActors[i]->params;
-                    u16 sceneId = gEntranceTable[globalCtx->setupExitList[exitId - 1]].scene;
-                    size_t result =
-                        sprintf(arg, "%s",
-                                OTRMessage_GetAccessibilityText("text/accessibility_text/accessibility_text_eng",
-                                                                0x0300 + sceneId));
-                    ASSERT(result < sizeof(arg), "Text arg buffer exceeded", __FILE__, __LINE__);
-                } else {
-                    arg[0] = '\0';
-                }
-                size_t result = sprintf(announceStr + announceStrLength, "%s, ", OTRMessage_GetAccessibilityText("text/accessibility_text/accessibility_text_eng",
-                                                                0x1000 + topVisibleActors[i]->id, arg));
-                ASSERT(result < sizeof(announceStr) - announceStrLength, "Text str buffer exceeded", __FILE__,
-                        __LINE__);
-                announceStrLength += result;
-                if (!readMultipleItems)
-                    break;
+                sTopVisibleItems[topItemIndex].actor = actor;
+                // topItems[topItemIndex].polyFlags = 0;
+            } else if (itemType == 0xA00000) {
+                // topItems[topItemIndex].actor = NULL;
+                sTopVisibleItems[topItemIndex].polyFlags = topIds[i].id & 0xFF;
             }
 
-            OTRTextToSpeechCallback(announceStr);
+            if (++topItemIndex == ARRAY_COUNT(sTopVisibleItems)) {
+                break;
+            }
         }
-        prevActorInView = topVisibleActors[0];
+    }
+
+    union VisibleItem focusedVisibleItem = sTopVisibleItems[sFocusedVisibleItemIdx];
+
+    if (sFocusedItemBeaconActive && ((focusedVisibleItem.polyFlags & 0xFFFFFF00) != 0) && (globalCtx->gameplayFrames % 20 == 0)) {
+        //TODO: replace with SoundCue
+        sBeaconFreq = LERP(0.08f, 0.2f, 1.0f - MAX(0.1f, MIN(1.0f, focusedVisibleItem.actor->xyzDistToPlayerSq / SQ(500.0f))));
+        static s8 reverbAdd = 1;
+        static Vec3f pos;
+        Math_Vec3f_Diff(&focusedVisibleItem.actor->projectedPos, &this->actor.projectedPos, &pos);
+        Audio_PlaySoundGeneral(NA_SE_EV_SHIP_BELL, &pos, 4, &sBeaconFreq, &D_801333E0, &reverbAdd);
+    }
+
+    if (focusedVisibleItem.actor != NULL &&
+        focusedVisibleItem.actor != sPrevFocusedVisibleItem.actor) {
+
+        u8 announceStr[256];
+        s32 announceStrLength = 0;
+        announceStr[0] = '\0';
+        u8 arg[48];
+        arg[0] = '\0';
+
+        u32 textId;
+        if ((focusedVisibleItem.polyFlags & 0xFFFFFF00) == 0) {
+            textId = 0x900 + focusedVisibleItem.polyFlags;
+        } else {
+            if (focusedVisibleItem.actor->id == ACTOR_SCENE_EXIT) {
+                u16 exitId = focusedVisibleItem.actor->params;
+                u16 sceneId = gEntranceTable[globalCtx->setupExitList[exitId - 1]].scene;
+                size_t result = sprintf(arg, "%s",
+                                        OTRMessage_GetAccessibilityText(
+                                            "text/accessibility_text/accessibility_text_eng", 0x0300 + sceneId));
+                ASSERT(result < sizeof(arg), "Text arg buffer exceeded", __FILE__, __LINE__);
+
+                textId = 0x1000 + focusedVisibleItem.actor->id;
+            } else {
+                textId = (focusedVisibleItem.actor->params << 16) | (0x1000 + focusedVisibleItem.actor->id);
+            }
+        }
+        char* accessibilityText =
+            OTRMessage_GetAccessibilityText("text/accessibility_text/accessibility_text_eng", textId, arg);
+        if (accessibilityText != NULL) {
+            size_t result = sprintf(announceStr + announceStrLength, "%s", accessibilityText);
+            ASSERT(result < sizeof(announceStr) - announceStrLength, "Text str buffer exceeded", __FILE__, __LINE__);
+            announceStrLength += result;
+        }
+
+        OTRTextToSpeechCallback(announceStr);
+
+        sPrevFocusedVisibleItem.actor = focusedVisibleItem.actor;
     }
 }
 
