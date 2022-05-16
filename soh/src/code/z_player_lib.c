@@ -2669,9 +2669,7 @@ void Player_UpdateVisionCue(Player* this, GlobalContext* globalCtx, Input* input
             if (focusedVisibleItem.actor->id == ACTOR_SCENE_EXIT) {
                 u16 exitId = focusedVisibleItem.actor->params;
                 u16 sceneId = gEntranceTable[globalCtx->setupExitList[exitId - 1]].scene;
-                size_t result = sprintf(arg, "%s",
-                                        OTRMessage_GetAccessibilityText(
-                                            "text/accessibility_text/accessibility_text_eng", 0x0300 + sceneId));
+                size_t result = sprintf(arg, "%s", OTRGetAccessibilityText(0x0300 + sceneId));
                 ASSERT(result < sizeof(arg), "Text arg buffer exceeded", __FILE__, __LINE__);
 
                 textId = 0x1000 + focusedVisibleItem.actor->id;
@@ -2679,8 +2677,7 @@ void Player_UpdateVisionCue(Player* this, GlobalContext* globalCtx, Input* input
                 textId = (focusedVisibleItem.actor->params << 16) | (0x1000 + focusedVisibleItem.actor->id);
             }
         }
-        char* accessibilityText =
-            OTRMessage_GetAccessibilityText("text/accessibility_text/accessibility_text_eng", textId, arg);
+        char* accessibilityText = OTRGetAccessibilityText(textId, arg);
         if (accessibilityText != NULL) {
             size_t result = sprintf(announceStr + announceStrLength, "%s", accessibilityText);
             ASSERT(result < sizeof(announceStr) - announceStrLength, "Text str buffer exceeded", __FILE__, __LINE__);

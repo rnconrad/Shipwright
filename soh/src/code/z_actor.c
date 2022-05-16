@@ -817,8 +817,7 @@ void TitleCard_InitBossName(GlobalContext* globalCtx, TitleCardContext* titleCtx
     titleCtx->delayTimer = 0;
 
     if (bossActorId != 0 && CVar_GetS32("gBlind_MessageTTS", 0)) {
-        sTitleCardText = OTRMessage_GetAccessibilityText("text/accessibility_text/accessibility_text_eng",
-                                                         0x1000 + bossActorId, NULL);
+        sTitleCardText = OTRGetAccessibilityText(0x1000 + bossActorId, NULL);
     }
 }
 
@@ -1042,7 +1041,7 @@ void TitleCard_InitPlaceName(GlobalContext* globalCtx, TitleCardContext* titleCt
 
     if (CVar_GetS32("gBlind_MessageTTS", 0)) {
         sTitleCardText =
-            OTRMessage_GetAccessibilityText("text/accessibility_text/accessibility_text_eng", 0x0300 + globalCtx->sceneNum, NULL);
+            OTRGetAccessibilityText(0x0300 + globalCtx->sceneNum, NULL);
     }
 }
 
